@@ -648,14 +648,14 @@ class COCOX(BaseModel):
                 json.dump(static_data, json_file, ensure_ascii=False, indent=2)
         return static_data
     
-    # def name_or_dir(self,name:Optional[Union[Path,str]]=None)->Union[str]:
-    #     # 判断是否为完整路径
-    #     if "/" in str(name) or "\\" in str(name):
-    #         # 包含路径分隔符,是完整路径
-    #         return 'dir'
-    #     else:
-    #         # 不包含路径分隔符,只是文件夹名称
-    #         return 'name'
+    def name_or_dir(self,name:Optional[Union[Path,str]]=None)->Union[str]:
+        # 判断是否为完整路径
+        if "/" in str(name) or "\\" in str(name):
+            # 包含路径分隔符,是完整路径
+            return 'dir'
+        else:
+            # 不包含路径分隔符,只是文件夹名称
+            return 'name'
     
     # def save_yolo(self,dst_dir:Optional[Union[Path,str]]=None,overwrite:bool=True)->None:
     #     """
@@ -694,35 +694,74 @@ class COCOX(BaseModel):
     #             # logger.warning(f"Label is empty: {label_path}")
     #             pass
 
-    # def visual(self,dst_dir:Optional[Union[Path,str]]=None,overwrite:bool=True)->None:
-    #     """可视化数据"""
+    def _get_img_id(self,img_path:Union[str,Path])->int:
+        """获取图片ID"""
+        img_path = Path(img_path)
+        # 全局变量
+        # 使用other_data字典存储map_img_id
+        if self.other_data is None:
+            self.other_data = {}
+        if 'map_img_id' not in self.other_data:
+            self.other_data['map_img_id'] = {it['file_name'] : it['id'] for it in self.data.dataset['images']}
+            
+        return  self.other_data['map_img_id'][img_path.name]
 
-    #     # 根据输入路径或默认配置确定YOLO输出路径
-    #     target_path = dst_dir if dst_dir else self.cfg.IMGDIR_VISUAL
-    #     visual_dir = target_path if self.name_or_dir(target_path) == 'dir' else self.cfg.ROOT.joinpath(target_path)
+    # 单个图像显示
+    def _vis_gt(self,img_path:Union[str,Path],dst_dir:Path,overwrite:bool=True)->None:
+        """可视化数据"""
+        target_path = dst_dir if dst_dir else self.cfg.IMGDIR_VISUAL
+        visual_dir = target_path if self.name_or_dir(target_path) == 'dir' else self.cfg.ROOT.joinpath(target_path)
             
-    #     if overwrite and visual_dir.exists():
-    #         shutil.rmtree(visual_dir)
-    #     visual_dir.mkdir(parents=True,exist_ok=True)
+        if overwrite and visual_dir.exists():
+            shutil.rmtree(visual_dir)
+        visual_dir.mkdir(parents=True,exist_ok=True)
         
-    #     assert self.data is not None, logger.error("Data is None, please load data first")
+       
+        img_path = Path(img_path)
+        img_path = self.cfg.ROOT.joinpath(self.cfg.IMGDIR).joinpath(img_path)
+        out_path = visual_dir.joinpath(img_path.name)
         
-    #     for img_id in self.data.getImgIds() :
-    #         file_name = self.data.imgs[img_id]['file_name']
-    #         img_path = self.cfg.ROOT.joinpath(self.cfg.IMGDIR).joinpath(file_name)
-    #         out_path = visual_dir.joinpath(file_name)
+        image = cv2.imread(img_path)
+        plt.imshow(image) 
+        plt.axis('off')
+        # 图片获取图片id
+        img_id = self._get_img_id(img_path.name)
+        # 根据图片获取所有anno
+        ann_ids = self.data.getAnnIds(imgIds=img_id)
+        one_anns = [self.data.anns[i] for i in ann_ids]
+        self.data.showBBox(anns=one_anns)
+        plt.savefig(out_path, bbox_inches='tight', pad_inches=0, dpi=300)
+
+
+    def vis_gt(self,dst_dir:Optional[Union[Path,str]]=None,overwrite:bool=True)->None:
+        """可视化数据"""
+
+        # 根据输入路径或默认配置确定YOLO输出路径
+        target_path = dst_dir if dst_dir else self.cfg.IMGDIR_VISUAL
+        visual_dir = target_path if self.name_or_dir(target_path) == 'dir' else self.cfg.ROOT.joinpath(target_path)
             
-    #         # 获取该图片所有的anno
-    #         anno_ids = self.data.getAnnIds(imgIds=img_id)
-    #         one_anns = [self.data.anns[i] for i in anno_ids]
+        if overwrite and visual_dir.exists():
+            shutil.rmtree(visual_dir)
+        visual_dir.mkdir(parents=True,exist_ok=True)
+        
+        assert self.data is not None, logger.error("Data is None, please load data first")
+        
+        for img_id in self.data.getImgIds() :
+            file_name = self.data.imgs[img_id]['file_name']
+            img_path = self.cfg.ROOT.joinpath(self.cfg.IMGDIR).joinpath(file_name)
+            out_path = visual_dir.joinpath(file_name)
             
-    #         image = cv2.imread(img_path)
-    #         plt.imshow(image) 
-    #         plt.axis('off')
-    #         self.data.showBBox(anns=one_anns)
-    #         plt.savefig(out_path, bbox_inches='tight', pad_inches=0, dpi=300)
-    #         plt.close()
-    #     logger.info(f"Visualization completed. Output saved to {visual_dir}")
+            # 获取该图片所有的anno
+            anno_ids = self.data.getAnnIds(imgIds=img_id)
+            one_anns = [self.data.anns[i] for i in anno_ids]
+            
+            image = cv2.imread(img_path)
+            plt.imshow(image) 
+            plt.axis('off')
+            self.data.showBBox(anns=one_anns)
+            plt.savefig(out_path, bbox_inches='tight', pad_inches=0, dpi=300)
+            plt.close()
+        logger.info(f"Visual image completed. Output saved to {visual_dir}")
 
     # def save_annfile(self,annfile:Optional[Path]=None)->None:
         
@@ -1212,33 +1251,33 @@ class COCOX(BaseModel):
     #         return []
     #     return list(set([ann['image_id'] for ann in self.data.dataset['annotations'] if ann['id'] in annIds]))
     
-    # def _get_catIds_by_annIds(self,annIds:List[int])->List[int]:
-    #     """
-    #     根据annIds获取类别id
-    #     """
-    #     if not self.data:
-    #         return []
-    #     return list(set([ann['category_id'] for ann in self.data.dataset['annotations'] if ann['id'] in annIds]))
+    def _get_catIds_by_annIds(self,annIds:List[int])->List[int]:
+        """
+        根据annIds获取类别id
+        """
+        if not self.data:
+            return []
+        return list(set([ann['category_id'] for ann in self.data.dataset['annotations'] if ann['id'] in annIds]))
     
-    # def _get_data(self,annIds:List[int],level:str="img")->Tuple[List[int],List[int],List[int]]:
-    #     """
-    #     根据annIds获取数据
-    #     """
-    #     if not annIds or not self.data:
-    #         return [],[],[]
+    def _get_data(self,annIds:List[int],level:str="img")->Tuple[List[int],List[int],List[int]]:
+        """
+        根据annIds获取数据
+        """
+        if not annIds or not self.data:
+            return [],[],[]
         
-    #     if level == "img":
-    #         res_imgIds = self._get_imgIds_by_annIds(annIds=annIds)
-    #         res_annIds = self.data.getAnnIds(imgIds=res_imgIds)
-    #         res_catIds = self._get_catIds_by_annIds(annIds=res_annIds)
-    #     elif level == "ann":
-    #         res_imgIds = self._get_imgIds_by_annIds(annIds=annIds)
-    #         res_annIds = annIds
-    #         res_catIds = self._get_catIds_by_annIds(annIds=res_annIds)
-    #     else:
-    #         raise ValueError(f"Invalid level: {level}")
+        if level == "img":
+            res_imgIds = self._get_imgIds_by_annIds(annIds=annIds)
+            res_annIds = self.data.getAnnIds(imgIds=res_imgIds)
+            res_catIds = self._get_catIds_by_annIds(annIds=res_annIds)
+        elif level == "ann":
+            res_imgIds = self._get_imgIds_by_annIds(annIds=annIds)
+            res_annIds = annIds
+            res_catIds = self._get_catIds_by_annIds(annIds=res_annIds)
+        else:
+            raise ValueError(f"Invalid level: {level}")
         
-    #     return res_catIds,res_imgIds,res_annIds
+        return res_catIds,res_imgIds,res_annIds
     
     # def _gen_dict(self,catIds:List[int],imgIds:List[int],annIds:List[int],alignCat:bool=True,keep_all_img:bool=True)->dict:
     #     if not keep_all_img and (not catIds or not self.data):

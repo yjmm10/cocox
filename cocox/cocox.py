@@ -14,7 +14,7 @@ import matplotlib.pyplot as plt
 
 from cocox.base import COCO
 
-from cocox.utils import logger, CCX, STATIC_DATA, plot_anno_info, plot_summary
+from cocox.utils import *
 
 
 class COCOX(BaseModel):
@@ -70,12 +70,12 @@ class COCOX(BaseModel):
         save_static = kwargs.get("save_static",False)
         static_path = Path(kwargs.get("static_path")) if kwargs.get("static_path") is not None else None
         
-        # 初始化数据
+        # 初始化数据,可能图片路径不存在
         res = self._any2data(data)
         if res is None:
             return
 
-        # 使用传入的cfg更新self.cfg
+        # 使用传入的cfg更新self.cfg，再找一次图片
         if cfg:
             self._update_cfg(cfg)
         # if self.cfg.IMGDIR_SRC is None:
@@ -87,15 +87,15 @@ class COCOX(BaseModel):
         # Statistics for annotation file data
         if self.data is not None:
             if isinstance(data,(Path,str)):
-
-                static_data = self.static(save_static,static_path)
-                if not correct_data:
-                    logger.info(f"{self.cfg.ROOT}[{type(data).__name__}]: "
-                            f"Total Images:{static_data['imgs']}, "
-                            f"Total Annotations:{static_data['anns']}, "
-                            f"Total Categories:{len(static_data['cats'])}, "
-                            f"Annotated Images:{static_data['img_in_ann']}, "
-                            f"Images in Folder:{static_data.get('img_in_folder',0)}")
+                pass
+                # static_data = self.static(save_static,static_path)
+                # if not correct_data:
+                #     logger.info(f"{self.cfg.ROOT}[{type(data).__name__}]: "
+                #             f"Total Images:{static_data['imgs']}, "
+                #             f"Total Annotations:{static_data['anns']}, "
+                #             f"Total Categories:{len(static_data['cats'])}, "
+                #             f"Annotated Images:{static_data['img_in_ann']}, "
+                #             f"Images in Folder:{static_data.get('img_in_folder',0)}")
         
         # Correct data
         if correct_data:
@@ -301,73 +301,73 @@ class COCOX(BaseModel):
         }
         self.other_data['dict']['id2cls'] = {cat['id']: cat['name'] for cat in self.data.dataset['categories']}
         
-    # def _2yolo(self)->None:
-    #     """将数据转换为YOLO格式"""
-    #     if self.other_data is None:
-    #         self.other_data = {}
+    def _2yolo(self)->None:
+        """将数据转换为YOLO格式"""
+        if self.other_data is None:
+            self.other_data = {}
         
-    #     if not self.other_data.get('yolo'):
-    #         self.other_data['yolo'] = {
-    #             'data': {},  # 初始化data字典
-    #             'id2cls': {}  # 如果需要，也可以初始化其他必要的键
-    #         }
+        if not self.other_data.get('yolo'):
+            self.other_data['yolo'] = {
+                'data': {},  # 初始化data字典
+                'id2cls': {}  # 如果需要，也可以初始化其他必要的键
+            }
         
-    #     # Ensure self.data exists
-    #     assert self.data is not None, "Dataset is empty, please load data first"
-    #     # Create image dict
-    #     images = {"%g" % x["id"]: x for x in self.data.dataset["images"]}
-    #     # Create image-annotations dict
-    #     imgToAnns = defaultdict(list)
-    #     for ann in self.data.dataset.get("annotations",[]):
-    #         imgToAnns[ann["image_id"]].append(ann)
+        # Ensure self.data exists
+        assert self.data is not None, "Dataset is empty, please load data first"
+        # Create image dict
+        images = {"%g" % x["id"]: x for x in self.data.dataset["images"]}
+        # Create image-annotations dict
+        imgToAnns = defaultdict(list)
+        for ann in self.data.dataset.get("annotations",[]):
+            imgToAnns[ann["image_id"]].append(ann)
 
-    #     # Write labels file
-    #     for img_id, img in images.items():
-    #         f = img["file_name"]
+        # Write labels file
+        for img_id, img in images.items():
+            f = img["file_name"]
             
-    #         # 如果该图片有标注数据
-    #         if int(img_id) in imgToAnns:
-    #             h, w = img["height"], img["width"]
-    #             bboxes = []
-    #             for ann in imgToAnns[int(img_id)]:
-    #                 # The COCO box format is [top left x, top left y, width, height]
-    #                 box = np.array(ann["bbox"], dtype=np.float64)
-    #                 box[:2] += box[2:] / 2  # xy top-left corner to center
-    #                 box[[0, 2]] /= w  # normalize x
-    #                 box[[1, 3]] /= h  # normalize y
-    #                 if box[2] <= 0 or box[3] <= 0:  # if w <= 0 and h <= 0
-    #                     continue
+            # 如果该图片有标注数据
+            if int(img_id) in imgToAnns:
+                h, w = img["height"], img["width"]
+                bboxes = []
+                for ann in imgToAnns[int(img_id)]:
+                    # The COCO box format is [top left x, top left y, width, height]
+                    box = np.array(ann["bbox"], dtype=np.float64)
+                    box[:2] += box[2:] / 2  # xy top-left corner to center
+                    box[[0, 2]] /= w  # normalize x
+                    box[[1, 3]] /= h  # normalize y
+                    if box[2] <= 0 or box[3] <= 0:  # if w <= 0 and h <= 0
+                        continue
 
-    #                 cls = ann["category_id"] - 1 
-    #                 box = [cls] + box.tolist()
-    #                 if box not in bboxes:
-    #                     bboxes.append(box)
-    #             self.other_data['yolo']['data'][f] = bboxes
-    #         # else:
-    #         #     # 如果图片没有标注数据，仍然保存空列表
-    #         #     self.other_data['yolo']['data'][f] = []
+                    cls = ann["category_id"] - 1 
+                    box = [cls] + box.tolist()
+                    if box not in bboxes:
+                        bboxes.append(box)
+                self.other_data['yolo']['data'][f] = bboxes
+            # else:
+            #     # 如果图片没有标注数据，仍然保存空列表
+            #     self.other_data['yolo']['data'][f] = []
                 
-    #     self.other_data['yolo']['id2cls'] = {cat['id']-1: cat['name'] for cat in self.data.dataset['categories']}
+        self.other_data['yolo']['id2cls'] = {cat['id']-1: cat['name'] for cat in self.data.dataset['categories']}
 
-    # def _get_cat(self,cat:Union[int,str],return_id:bool=False):
-    #     """获取类别信息, 用来判断类别是否存在
-    #     force_int: 强制返回int类型
-    #     """
-    #     if isinstance(cat,int):
-    #         if return_id:
-    #             return True, cat
-    #         cat_str = self.data.cats.get(cat,None)
-    #         if cat_str:
-    #             return True, cat_str.get('name',None)
-    #         else:
-    #             return False, None
-    #     elif isinstance(cat,str):
-    #         for c in self.data.cats.values():
-    #             if c['name'] == cat:
-    #                 return True, c.get('id',None)
-    #         return False, None
-    #     else:
-    #         raise ValueError(f"Invalid category: {cat}")
+    def _get_cat(self,cat:Union[int,str],return_id:bool=False):
+        """获取类别信息, 用来判断类别是否存在
+        force_int: 强制返回int类型
+        """
+        if isinstance(cat,int):
+            if return_id:
+                return True, cat
+            cat_str = self.data.cats.get(cat,None)
+            if cat_str:
+                return True, cat_str.get('name',None)
+            else:
+                return False, None
+        elif isinstance(cat,str):
+            for c in self.data.cats.values():
+                if c['name'] == cat:
+                    return True, c.get('id',None)
+            return False, None
+        else:
+            raise ValueError(f"Invalid category: {cat}")
         
     def _get_img(self,img:Union[int,str],return_id:bool=False):
         """
@@ -390,27 +390,27 @@ class COCOX(BaseModel):
         else:
             raise ValueError(f"Invalid image: {img}")
     
-    # def _get_imglist(self)->List[str]:
-    #     """获取图片列表"""
-    #     return [img['file_name'] for img in self.data.dataset['images']] if self.data else []
+    def _get_imglist(self)->List[str]:
+        """获取图片列表"""
+        return [img['file_name'] for img in self.data.dataset['images']] if self.data else []
     
-    # def _get_catlist(self)->List[str]:
-    #     """获取类别列表"""
-    #     return [cat['name'] for cat in self.data.dataset['categories']]
+    def _get_map_cats(self)->List[str]:
+        """获取类别列表"""
+        return {v['id']:v['name'] for k,v in self.data.cats.items()}
 
 
-    # def del_empty_dir(self)->None:
-    #     """删除空目录"""
-    #     for dir in self.cfg.ROOT.iterdir():
-    #         if dir.is_dir() and not any(dir.iterdir()):
-    #             try:
-    #                 dir.rmdir()
-    #             except Exception as e:
-    #                 logger.error(f"删除目录 {dir} 时出错: {e}")
+    def del_empty_dir(self)->None:
+        """删除空目录"""
+        for dir in self.cfg.ROOT.iterdir():
+            if dir.is_dir() and not any(dir.iterdir()):
+                try:
+                    dir.rmdir()
+                except Exception as e:
+                    logger.error(f"删除目录 {dir} 时出错: {e}")
     
-    def vis_anno_info(self, save_dir=Path("")):
+    def vis_anno_info(self, save_dir:Optional[Path]=None)->None:
         """从COCO数据集绘制标签统计信息"""
-        save_dir = self.cfg.ROOT.joinpath(self.cfg.IMGFOLDER) if save_dir is None else save_dir
+        save_dir = self.cfg.ROOT.joinpath(self.cfg.IMGDIR_ANNFILE_VISUAL) if save_dir is None else save_dir
         
         # 获取所有标注信息
         data = copy.deepcopy(self.data)
@@ -431,14 +431,15 @@ class COCOX(BaseModel):
                 boxes[i, 3] = boxes_raw[i, 3] / img['height']  # height
         
         cls = np.array([x['category_id']-1 for x in anns])
-        names = {cat['id']: cat['name'] for cat in data.loadCats(data.getCatIds())}
+        names = {str(cat['id']): cat['name'] for cat in data.loadCats(data.getCatIds())}
 
         static_data = self._static()   
-        plot_summary(static_data, save_dir)
-        json_static_data = plot_anno_info(boxes, cls, names, save_dir)
+        # 绘制统计信息
+        summary_data = plot_summary(static_data, save_dir)
+        # 绘制标注信息
+        plot_anno_info(boxes, cls, names, save_dir)
         logger.info(f"annotation visualization results saved to {save_dir}")
-        return json_static_data
-
+        return summary_data
 
     def _static(self)->STATIC_DATA:
         """
@@ -457,7 +458,7 @@ class COCOX(BaseModel):
         # 图片文件夹
         img_dir = self.cfg.ROOT.joinpath(self.cfg.IMGDIR).joinpath(self.cfg.IMGFOLDER)
         if img_dir.exists():
-            list_image_in_dir = [f.name for f in img_dir.iterdir() if f.is_file() and f.suffix in ['.jpg','.png','.jpeg','.bmp','.tiff','.gif']]
+            list_image_in_dir = [f.name for f in img_dir.iterdir() if f.is_file() and f.suffix.lower() in IMG_EXT]
         else:
             list_image_in_dir = []
         static_data.nums_image_in_dir = len(list_image_in_dir)
@@ -474,7 +475,7 @@ class COCOX(BaseModel):
         static_data.nums_image_in_ann = len(list_image_in_ann)
         # 类别 id: 类别名
         dict_cats = {cat['id'] : cat['name'] for cat in self.data.dataset['categories']}
-        static_data.cats = dict_cats
+        static_data.cats = {v:k for k,v in dict_cats.items()}
         static_data.nums_cats = len(list(dict_cats.keys()))
     
         # 类别有多少图片,多少个box
@@ -490,7 +491,7 @@ class COCOX(BaseModel):
         for cat_name in result:
             result[cat_name]['img'] = list(set(result[cat_name]['img']))
         static_data.relate_cat_box = {k:v['box'] for k,v in result.items()}
-        static_data.relate_cat_img = {k:v['img'] for k,v in result.items()}
+        static_data.relate_cat_img = {k:len(v['img']) for k,v in result.items()}
     
         
         # 图片与标注的差异
@@ -514,7 +515,6 @@ class COCOX(BaseModel):
         
         return static_data
         
-
     def static(self, save:bool=False, static_path:Optional[Path]=None)->Optional[Dict]:
         # 统计数据，包括：
         # 1. 图片总数 imgs
@@ -590,7 +590,7 @@ class COCOX(BaseModel):
         static_data["img_in_ann"] = len(anno_imgs)
         
         # 文件夹中图片总数 folder_imgs
-        img_dir = self.cfg.ROOT.joinpath(self.cfg.IMGDIR)
+        img_dir = self.cfg.ROOT.joinpath(self.cfg.IMGDIR).joinpath(self.cfg.IMGFOLDER)
         if not img_dir.exists():
             logger.warning(f"图片目录 {img_dir} 不存在,跳过文件夹统计")
         else:
@@ -657,87 +657,60 @@ class COCOX(BaseModel):
             # 不包含路径分隔符,只是文件夹名称
             return 'name'
     
-    # def save_yolo(self,dst_dir:Optional[Union[Path,str]]=None,overwrite:bool=True)->None:
-    #     """
-    #     保存YOLO数据
-    #     dst_dir: 保存路径，默认在ROOT/yolo
-    #     dst_name: 保存名称，默认在yolo
-    #     """
-    #     if self.other_data is None or not self.other_data.get('yolo'):
-    #         self._2yolo()
+    def save_yolo(self,dst_dir:Optional[Union[Path,str]]=None,overwrite:bool=True)->None:
+        """
+        保存YOLO数据
+        dst_dir: 保存路径，默认在ROOT/yolo
+        dst_name: 保存名称，默认在yolo
+        """
+        if self.other_data is None or not self.other_data.get('yolo'):
+            self._2yolo()
         
-    #     # 根据输入路径或默认配置确定YOLO输出路径
-    #     target_path = dst_dir if dst_dir else self.cfg.YOLODIR
-    #     yolo_path = target_path if self.name_or_dir(target_path) == 'dir' else self.cfg.ROOT.joinpath(target_path)
-
-    #     if overwrite and yolo_path.exists():
-    #         shutil.rmtree(yolo_path)
-    #     yolo_path.mkdir(parents=True,exist_ok=True)
-        
-    #     assert len(self.other_data['yolo']['data']), logger.error(f"YOLO data is empty in {yolo_path}, please convert to YOLO format first by calling self._2yolo()")
-    #     for filename,labels in self.other_data['yolo']['data'].items():
-    #         src_path = self.cfg.IMGDIR_SRC.joinpath(filename)
-    #         dst_path = yolo_path.joinpath(filename)
-    #         if src_path.exists():
-    #             shutil.copy2(src_path,dst_path)
-    #         else:
-    #             logger.warning(f"Image not found: {src_path}")
-            
-    #         label_path = yolo_path.joinpath(Path(filename).with_suffix(".txt"))
-    #         # Write
-    #         if labels:
-    #             with open(label_path, "w") as file:
-    #                 for label in labels:
-    #                     line = (*label,)  # cls, box or segments
-    #                     file.write(("%g " * len(line)).rstrip() % line + "\n")
-    #         else:
-    #             # logger.warning(f"Label is empty: {label_path}")
-    #             pass
-
-    def _get_img_id(self,img_path:Union[str,Path])->int:
-        """获取图片ID"""
-        img_path = Path(img_path)
-        # 全局变量
-        # 使用other_data字典存储map_img_id
-        if self.other_data is None:
-            self.other_data = {}
-        if 'map_img_id' not in self.other_data:
-            self.other_data['map_img_id'] = {it['file_name'] : it['id'] for it in self.data.dataset['images']}
-            
-        return  self.other_data['map_img_id'][img_path.name]
-
-    # 单个图像显示
-    def _vis_gt(self,img_path:Union[str,Path],dst_dir:Path,overwrite:bool=True)->None:
-        """可视化数据"""
-        target_path = dst_dir if dst_dir else self.cfg.IMGDIR_VISUAL
-        visual_dir = target_path if self.name_or_dir(target_path) == 'dir' else self.cfg.ROOT.joinpath(target_path)
-            
-        if overwrite and visual_dir.exists():
-            shutil.rmtree(visual_dir)
-        visual_dir.mkdir(parents=True,exist_ok=True)
-        
-       
-        img_path = Path(img_path)
-        img_path = self.cfg.ROOT.joinpath(self.cfg.IMGDIR).joinpath(img_path)
-        out_path = visual_dir.joinpath(img_path.name)
-        
-        image = cv2.imread(img_path)
-        plt.imshow(image) 
-        plt.axis('off')
-        # 图片获取图片id
-        img_id = self._get_img_id(img_path.name)
-        # 根据图片获取所有anno
-        ann_ids = self.data.getAnnIds(imgIds=img_id)
-        one_anns = [self.data.anns[i] for i in ann_ids]
-        self.data.showBBox(anns=one_anns)
-        plt.savefig(out_path, bbox_inches='tight', pad_inches=0, dpi=300)
-
-
-    def vis_gt(self,dst_dir:Optional[Union[Path,str]]=None,overwrite:bool=True)->None:
-        """可视化数据"""
-
         # 根据输入路径或默认配置确定YOLO输出路径
-        target_path = dst_dir if dst_dir else self.cfg.IMGDIR_VISUAL
+        target_path = dst_dir if dst_dir else self.cfg.YOLODIR
+        yolo_path = target_path if self.name_or_dir(target_path) == 'dir' else self.cfg.ROOT.joinpath(target_path)
+
+        if overwrite and yolo_path.exists():
+            shutil.rmtree(yolo_path)
+        yolo_path.mkdir(parents=True,exist_ok=True)
+        
+        assert len(self.other_data['yolo']['data']), logger.error(f"YOLO data is empty in {yolo_path}, please convert to YOLO format first by calling self._2yolo()")
+        for filename,labels in self.other_data['yolo']['data'].items():
+            src_path = self.cfg.IMGDIR_SRC.joinpath(filename)
+            dst_path = yolo_path.joinpath(filename)
+            if src_path.exists():
+                shutil.copy2(src_path,dst_path)
+            else:
+                logger.warning(f"Image not found: {src_path}")
+            
+            label_path = yolo_path.joinpath(Path(filename).with_suffix(".txt"))
+            # Write
+            if labels:
+                with open(label_path, "w") as file:
+                    for label in labels:
+                        line = (*label,)  # cls, box or segments
+                        file.write(("%g " * len(line)).rstrip() % line + "\n")
+            else:
+                # logger.warning(f"Label is empty: {label_path}")
+                pass
+
+    def vis_gt(self, src_path:Optional[Union[Path,str,List[Union[Path,str]]]]=None, dst_dir:Optional[Union[Path,str]]=None,overwrite:bool=True)->None:
+        """可视化标注数据
+
+        Args:
+            src_path (Optional[Union[Path,str,List[Union[Path,str]]]], optional): 
+                需要可视化的图片路径。可以是单个文件路径、目录路径或路径列表。
+                如果为None,则可视化所有图片。默认为None。
+            dst_dir (Optional[Union[Path,str]], optional): 
+                可视化结果保存目录。如果为None,则保存到默认的vis/default目录。默认为None。
+            overwrite (bool, optional): 
+                是否覆盖已存在的输出目录。默认为True。
+
+        Raises:
+            AssertionError: 数据未加载时抛出异常。
+        """
+        # 根据输入路径或默认配置确定YOLO输出路径,默认配置为vis/default目录
+        target_path = dst_dir if dst_dir else self.cfg.ROOT.joinpath(self.cfg.IMGDIR_VISUAL).joinpath(self.cfg.IMGFOLDER)
         visual_dir = target_path if self.name_or_dir(target_path) == 'dir' else self.cfg.ROOT.joinpath(target_path)
             
         if overwrite and visual_dir.exists():
@@ -746,510 +719,597 @@ class COCOX(BaseModel):
         
         assert self.data is not None, logger.error("Data is None, please load data first")
         
-        for img_id in self.data.getImgIds() :
+        
+        if src_path is None:
+            img_ids = self.data.getImgIds()
+        else:
+            # 将输入统一转换为列表
+            if isinstance(src_path, (str, Path)):
+                src_paths = [src_path]
+            else:
+                src_paths = src_path
+                
+            missing_files = []
+            img_files = []
+            
+            # 处理每个输入路径
+            for path in src_paths:
+                path = Path(path)
+                if path.is_dir():
+                    # 如果是目录,获取目录下所有图片文件
+                    img_files.extend([f.name for f in path.glob("*") if f.suffix.lower() in IMG_EXT])
+                else:
+                    img_files.append(path.name)
+            # 统计重复的文件名
+            from collections import Counter
+            file_counts = Counter(img_files)
+            duplicate_files = [f for f, count in file_counts.items() if count > 1]
+            
+            # 去重
+            img_files = list(set(img_files))
+            
+            # 获取所有图片的ID
+            img_ids = []
+            for src_file in img_files:
+                img_id = self._get_img(src_file, return_id=True)[1]
+                if img_id is not None:
+                    img_ids.append(img_id)
+                else:
+                    missing_files.append(str(src_file))
+                    
+            if missing_files:
+                logger.info(f"The following files do not exist or are invalid: {', '.join(missing_files)}")
+            if duplicate_files:
+                logger.info(f"Duplicate files detected: {', '.join(duplicate_files)}, automatically deduplicated")
+        
+        import threading
+        from concurrent.futures import ThreadPoolExecutor
+        from tqdm import tqdm
+        
+        def vis_bbox(img_id):
             file_name = self.data.imgs[img_id]['file_name']
-            img_path = self.cfg.ROOT.joinpath(self.cfg.IMGDIR).joinpath(file_name)
+            img_path = self.cfg.ROOT.joinpath(self.cfg.IMGDIR).joinpath(self.cfg.IMGFOLDER).joinpath(file_name)
             out_path = visual_dir.joinpath(file_name)
             
             # 获取该图片所有的anno
             anno_ids = self.data.getAnnIds(imgIds=img_id)
             one_anns = [self.data.anns[i] for i in anno_ids]
             
-            image = cv2.imread(img_path)
-            plt.imshow(image) 
-            plt.axis('off')
-            self.data.showBBox(anns=one_anns)
-            plt.savefig(out_path, bbox_inches='tight', pad_inches=0, dpi=300)
-            plt.close()
-        logger.info(f"Visual image completed. Output saved to {visual_dir}")
-
-    # def save_annfile(self,annfile:Optional[Path]=None)->None:
+            # 使用线程锁确保matplotlib操作的线程安全
+            with plt_lock:
+                image = cv2.imread(str(img_path))
+                plt.figure()
+                plt.imshow(image) 
+                plt.axis('off')
+                self.data.showBBox(anns=one_anns)
+                plt.savefig(out_path, bbox_inches='tight', pad_inches=0, dpi=300)
+                plt.close()
         
-    #     """保存annfile"""
-    #     if self.other_data is None or not self.other_data.get('dict'):
-    #         self._2dict()
-    #     ann_path = self.cfg.ROOT.joinpath(self.cfg.ANNDIR)
-    #     ann_path.mkdir(parents=True,exist_ok=True)
-    #     with open(ann_path.joinpath(annfile if annfile else self.cfg.ANNFILE), 'w', encoding='utf-8') as json_file:
-    #         json.dump(self.other_data['dict']['data'], json_file, ensure_ascii=False, indent=2)  # Use indent parameter to beautify output
-
-    # def save_img(self,dst_path:Optional[Path]=None):
-    #     """复制图片到目标路径"""
-    #     try:
-    #         if not self.cfg.IMGDIR_SRC.exists():
-    #             logger.error(f"IMGDIR_SRC not found: {self.cfg.IMGDIR_SRC}")
-    #             return
-    #     except Exception as e:
-    #         logger.error(f"检查IMGDIR_SRC时出错: {str(e)}")
-    #         return
+        # 创建matplotlib的线程锁
+        plt_lock = threading.Lock()
         
-    #     # Get image list and create destination path
-    #     imglist = self._get_imglist()
-    #     img_dst_path = self.cfg.ROOT.joinpath(self.cfg.IMGDIR) if dst_path is None else dst_path
-    #     img_dst_path.mkdir(parents=True, exist_ok=True)
-        
-    #     # Batch copy images
-    #     for img in imglist:
-    #         src_path = self.cfg.IMGDIR_SRC.joinpath(img)
-    #         temp_path = img_dst_path.joinpath(img)
+        # 使用线程池并发处理图片
+        max_workers = min(os.cpu_count() or 4, 8)  # 限制最大线程数
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            list(tqdm(executor.map(vis_bbox, img_ids), total=len(img_ids), desc="可视化处理"))
             
-    #         # Skip if destination file exists
-    #         if temp_path.exists():
-    #             continue
+        logger.info(f"并发可视化处理完成。输出保存至 {visual_dir}")
+
+
+    def save_annfile(self,annfile:Optional[Path]=None)->None:
+        
+        """保存annfile"""
+        if self.other_data is None or not self.other_data.get('dict'):
+            self._2dict()
+        ann_path = self.cfg.ROOT.joinpath(self.cfg.ANNDIR)
+        ann_path.mkdir(parents=True,exist_ok=True)
+        with open(ann_path.joinpath(annfile if annfile else self.cfg.ANNFILE), 'w', encoding='utf-8') as json_file:
+            json.dump(self.other_data['dict']['data'], json_file, ensure_ascii=False, indent=2)  # Use indent parameter to beautify output
+
+    def save_img(self,dst_path:Optional[Path]=None):
+        """复制图片到目标路径
+        
+        将数据集中的图片从源路径复制到目标路径，复制完成后，更新源路径为自身的路径
+        
+        Args:
+            dst_path (Optional[Path]): 目标路径，如果为None则使用配置中的默认路径
+            
+        Returns:
+            None: 直接将图片复制到目标路径
+        """
+        # 检查源图片目录是否存在
+        try:
+            if not self.cfg.IMGDIR_SRC.exists():
+                logger.error(f"IMGDIR_SRC not found: {self.cfg.IMGDIR_SRC}")
+                return
+        except Exception as e:
+            logger.error(f"检查IMGDIR_SRC时出错: {str(e)}")
+            return
+        
+        # Get image list and create destination path
+        imglist = self._get_imglist()
+        img_dst_path = self.cfg.ROOT.joinpath(self.cfg.IMGDIR).joinpath(self.cfg.IMGFOLDER) if dst_path is None else dst_path
+        img_dst_path.mkdir(parents=True, exist_ok=True)
+        
+        # Batch copy images
+        for img in imglist:
+            src_path = self.cfg.IMGDIR_SRC.joinpath(img)
+            temp_path = img_dst_path.joinpath(img)
+            
+            # Skip if destination file exists
+            if temp_path.exists():
+                continue
                 
-    #         # Copy image file
-    #         if src_path.exists():
-    #             # Ensure destination directory exists
-    #             temp_path.parent.mkdir(parents=True, exist_ok=True)
-    #             shutil.copy2(src_path, temp_path)
-    #         else:
-    #             logger.warning(f"Image {img} not found in source directory {self.cfg.IMGDIR_SRC}")
+            # Copy image file
+            if src_path.exists():
+                # Ensure destination directory exists
+                temp_path.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(src_path, temp_path)
+            else:
+                logger.warning(f"Image {img} not found in source directory {self.cfg.IMGDIR_SRC}")
                 
-    #     # Update image source path to destination path
-    #     self.cfg.IMGDIR_SRC = img_dst_path
+        # Update image source path to destination path
+        self.cfg.IMGDIR_SRC = img_dst_path
 
-    # def save_data(self,
-    #               dst_file: Optional[CCX] = None,
-    #               visual: bool = False, 
-    #               yolo: bool = False,
-    #               only_ann: bool = False,
-    #               overwrite: bool = True) -> Optional[COCOX]:
-    #     """将数据保存为实际文件
+    def save_data(self,
+                  dst_file: Optional[CCX] = None,
+                  visual: bool = False, 
+                  yolo: bool = False,
+                  only_ann: bool = False,
+                  overwrite: bool = True) -> Optional[COCOX]:
+        """将数据保存为实际文件
 
-    #     Args:
-    #         dst_file (Optional[CCX], optional): 目标配置文件,用于指定保存路径. Defaults to None.
-    #         visual (bool, optional): 是否生成可视化图片. Defaults to False.
-    #         yolo (bool, optional): 是否保存为YOLO格式. Defaults to False.
-    #         only_ann (bool, optional): 是否只保存标注文件. Defaults to False.
-    #         overwrite (bool, optional): 是否覆盖已有文件. Defaults to True.
+        Args:
+            dst_file (Optional[CCX], optional): 目标配置文件,用于指定保存路径. Defaults to None.
+            visual (bool, optional): 是否生成可视化图片. Defaults to False.
+            yolo (bool, optional): 是否保存为YOLO格式. Defaults to False.
+            only_ann (bool, optional): 是否只保存标注文件. Defaults to False.
+            overwrite (bool, optional): 是否覆盖已有文件. Defaults to True.
 
-    #     Returns:
-    #         Optional[COCOX]: 返回保存后的COCOX对象,如果dst_file为None则返回self
-    #     """
-    #     assert self.data, logger.error("Data is None")
+        Returns:
+            Optional[COCOX]: 返回保存后的COCOX对象,如果dst_file为None则返回self
+        """
+        assert self.data, logger.error("Data is None")
         
-    #     # 如果指定了目标配置文件
-    #     # 选择操作对象(新建或当前)
-    #     obj = COCOX(data=self, cfg=dst_file) if dst_file else self
-    #     # obj.cfg.IMGDIR_SRC = self.cfg.ROOT.joinpath(self.cfg.IMGDIR)
-    #     # 执行保存操作
-    #     if not only_ann:
-    #         obj.save_img()
-    #     obj.save_annfile()
-    #     if yolo:
-    #         obj.save_yolo()
-    #     if visual:
-    #         obj.visual(overwrite=overwrite)
+        # 如果指定了目标配置文件
+        # 选择操作对象(新建或当前)
+        obj = COCOX(data=self, cfg=dst_file) if dst_file else self
+        # obj.cfg.IMGDIR_SRC = self.cfg.ROOT.joinpath(self.cfg.IMGDIR)
+        # 执行保存操作
+        if not only_ann:
+            obj.save_img()
+        obj.save_annfile()
+        if yolo:
+            obj.save_yolo()
+        if visual:
+            obj.vis_gt(overwrite=overwrite)
         
-    #     # 清空多余目录
-    #     obj.del_empty_dir()    
-    #     return obj
+        # 清空多余目录
+        obj.del_empty_dir()    
+        return obj
         
-
-
-
-    # def update_cat(self, new_cat:Dict[int,str]):
-    #     """
-    #     根据给定的类别字典更新数据集中的类别
-    #     """
-    #     if self.data is None:
-    #         return
-    #     dataset = self.data.dataset
-    #     # Check if categories need to be expanded
-    #     raw_cat = {cat['id']: cat['name'] for cat in dataset['categories']}
-    #     rawId = max(raw_cat.keys())
+    def update_cat(self, new_cat:Dict[int,str]):
+        """根据给定的类别字典更新数据集中的类别
         
-    #     existing_names = {cat['name'] for cat in dataset['categories']}
-    #     for _, new_name in new_cat.items():
-    #         if new_name not in existing_names:
-    #             rawId += 1
-    #             dataset['categories'].append({
-    #                 'id': rawId,
-    #                 'name': new_name,
-    #                 'supercategory': ''
-    #             })
-    #             logger.info(f"Added new category: ID {rawId}, name '{new_name}'")
+        此函数用于更新数据集中的类别信息，可以添加新类别、修改类别ID和名称。
+        函数会自动处理类别ID的映射关系，并更新所有标注中的类别ID。
+        
+        Args:
+            new_cat (Dict[int,str]): 新的类别字典，键为类别ID，值为类别名称
+                                    例如：{3:'Text', 2:'Table', 1:'Formula', 4:'Figure'}
+        
+        Returns:
+            None: 直接修改当前数据集的类别信息
+            
+        Note:
+            - 如果提供的类别名称在原数据集中不存在，会自动添加为新类别
+            - 函数会自动更新所有标注中的类别ID
+            - 更新完成后会重建索引
+        """
+        if self.data is None:
+            return
+        dataset = self.data.dataset
+        # Check if categories need to be expanded
+        raw_cat = {cat['id']: cat['name'] for cat in dataset['categories']}
+        rawId = max(raw_cat.keys())
+        
+        existing_names = {cat['name'] for cat in dataset['categories']}
+        for _, new_name in new_cat.items():
+            if new_name not in existing_names:
+                rawId += 1
+                dataset['categories'].append({
+                    'id': rawId,
+                    'name': new_name,
+                    'supercategory': ''
+                })
+                logger.info(f"Added new category: ID {rawId}, name '{new_name}'")
        
-    #     new_cat = {cat['id']: new_id for cat in dataset['categories'] for new_id, name in new_cat.items() if cat['name'] == name}
+        new_cat = {cat['id']: new_id for cat in dataset['categories'] for new_id, name in new_cat.items() if cat['name'] == name}
         
-    #     # Store unique mapping info
-    #     mapping_info = set()
+        # Store unique mapping info
+        mapping_info = set()
             
-    #     # Update categories
-    #     for category in dataset['categories']:
-    #         if category['id'] in new_cat.keys():
-    #             old_id = category['id']
-    #             old_name = category['name']
-    #             category['id'] = new_cat[old_id]
-    #             if old_id != category['id'] or old_name != category['name']:
-    #                 mapping_info.add(f"[{old_name}] {old_id} -> {category['id']}")
+        # Update categories
+        for category in dataset['categories']:
+            if category['id'] in new_cat.keys():
+                old_id = category['id']
+                old_name = category['name']
+                category['id'] = new_cat[old_id]
+                if old_id != category['id'] or old_name != category['name']:
+                    mapping_info.add(f"[{old_name}] {old_id} -> {category['id']}")
 
-    #     # Update annotations
-    #     for annotation in dataset['annotations']:
-    #         if annotation['category_id'] in new_cat.keys():
-    #             old_id = annotation['category_id']
-    #             annotation['category_id'] = new_cat[old_id]
+        # Update annotations
+        for annotation in dataset['annotations']:
+            if annotation['category_id'] in new_cat.keys():
+                old_id = annotation['category_id']
+                annotation['category_id'] = new_cat[old_id]
                 
-    #     # Log unique mappings at once
-    #     if mapping_info:
-    #         logger.info("Category mapping:\n" + " | ".join(sorted(mapping_info)))
+        # Log unique mappings at once
+        if mapping_info:
+            logger.info("Category mapping:\n" + " | ".join(sorted(mapping_info)))
             
-    #     self.data.createIndex()
+        self.data.createIndex()
 
-    # def update_cat_force(self,new_cat:Dict[int,str]):
-    #     """
-    #     强制更新类别
-    #     """
-    #     dataset = self.data.dataset
-    #     # 清空原有类别
-    #     dataset['categories'] = []
-    #     # 添加新类别
-    #     for cat_id, cat_name in new_cat.items():
-    #         dataset['categories'].append({
-    #             'id': cat_id,
-    #             'name': cat_name,
-    #             'supercategory': ''
-    #         })
-    #     # 更新索引
-    #     self.data.createIndex()
+    def update_cat_force(self,new_cat:Dict[int,str]):
+        """
+        强制更新类别
+        """
+        dataset = self.data.dataset
+        # 清空原有类别
+        dataset['categories'] = []
+        # 添加新类别
+        for cat_id, cat_name in new_cat.items():
+            dataset['categories'].append({
+                'id': cat_id,
+                'name': cat_name,
+                'supercategory': ''
+            })
+        # 更新索引
+        self.data.createIndex()
 
-    # def rename_cat(self, raw_cat:str, new_cat:str)->None:
-    #     """
-    #     修改类别名称,不对ID进行修改
-    #     """
-    #     dataset = self.data.dataset
-    #     for category in dataset['categories']:
-    #         if category['name'] == raw_cat:
-    #             category['name'] = new_cat
-    #     self.data.createIndex()
+    def rename_cat(self, raw_cat:str, new_cat:str)->None:
+        """
+        修改类别名称,不对ID进行修改
+        """
+        dataset = self.data.dataset
+        for category in dataset['categories']:
+            if category['name'] == raw_cat:
+                category['name'] = new_cat
+        self.data.createIndex()
     
-    # def align_cat(self,other_cat:Dict,cat_keep:bool=True)->Dict:
-    #     """
-    #     对齐两个数据集的类别，对id做处理，但未对ann数据做处理
+    def align_cat(self,other_cat:Dict,cat_keep:bool=True)->Dict:
+        """
+        对齐两个数据集的类别，对id做处理，但未对ann数据做处理
         
-    #     Args:
-    #         other_cat: 另一个数据集的类别字典
-    #         cat_keep: 是否保留当前数据集的类别作为基准
-    #                  True: 以当前数据集类别为基准,将other_cat中新的类别添加进来
-    #                  False: 以other_cat为基准,将当前数据集中缺失的类别添加到other_cat中
-    #     """
-    #     raw_cat = {cat['id']: cat['name'] for cat in self.data.dataset['categories']} if self.data else {}
-    #     if cat_keep:
-    #         new_cat = raw_cat
-    #         maxId = len(raw_cat.keys())
-    #         new_cats = [cat for cat in other_cat if cat not in raw_cat]
-    #         logger.info(f"Found {len(new_cats)} new categories from other dataset")
-    #         for cat in other_cat:
-    #             if cat not in raw_cat:
-    #                 maxId += 1
-    #                 raw_cat[maxId] = other_cat[cat]
-    #     else:
-    #         new_cat = other_cat
-    #         maxId = len(raw_cat.keys())
-    #         missing_cats = [cat for cat in raw_cat if cat not in other_cat]
-    #         logger.info(f"Found {len(missing_cats)} categories missing from other dataset")
-    #         for cat in missing_cats:
-    #             maxId += 1
-    #             new_cat[maxId] = raw_cat[cat]
+        Args:
+            other_cat: 另一个数据集的类别字典
+            cat_keep: 是否保留当前数据集的类别作为基准
+                     True: 以当前数据集类别为基准,将other_cat中新的类别添加进来
+                     False: 以other_cat为基准,将当前数据集中缺失的类别添加到other_cat中
+        """
+        raw_cat = {cat['id']: cat['name'] for cat in self.data.dataset['categories']} if self.data else {}
+        if cat_keep:
+            new_cat = raw_cat
+            maxId = len(raw_cat.keys())
+            new_cats = [cat for cat in other_cat if cat not in raw_cat]
+            logger.info(f"Found {len(new_cats)} new categories from other dataset")
+            for cat in other_cat:
+                if cat not in raw_cat:
+                    maxId += 1
+                    raw_cat[maxId] = other_cat[cat]
+        else:
+            new_cat = other_cat
+            maxId = len(raw_cat.keys())
+            missing_cats = [cat for cat in raw_cat if cat not in other_cat]
+            logger.info(f"Found {len(missing_cats)} categories missing from other dataset")
+            for cat in missing_cats:
+                maxId += 1
+                new_cat[maxId] = raw_cat[cat]
         
-    #     return new_cat        
+        return new_cat        
 
-    # def rename_cat_in_ann(self,old_name:Union[str,int],new_name:Union[str,int]):
-    #     """
-    #     只修改标注中的类别，类别中的名称不修改
-    #     """
-    #     _,old_id = self._get_cat(old_name,return_id=True)
-    #     _,new_id = self._get_cat(new_name,return_id=True)
-    #     assert old_id in [cat['id'] for cat in self.data.dataset['categories']], \
-    #         logger.error(f"Category {old_name} not found in dataset")
-    #     assert new_id in [cat['id'] for cat in self.data.dataset['categories']], \
-    #         logger.error(f"Category {new_name} not found in dataset")
-    #     for ann in self.data.dataset['annotations']:
-    #         if ann['category_id'] == old_id:
-    #             ann['category_id'] = new_id
-    #     self.data.createIndex()
+    def rename_cat_in_ann(self,old_name:Union[str,int],new_name:Union[str,int]):
+        """
+        只修改标注中的类别，类别中的名称不修改
+        """
+        _,old_id = self._get_cat(old_name,return_id=True)
+        _,new_id = self._get_cat(new_name,return_id=True)
+        assert old_id in [cat['id'] for cat in self.data.dataset['categories']], \
+            logger.error(f"Category {old_name} not found in dataset")
+        assert new_id in [cat['id'] for cat in self.data.dataset['categories']], \
+            logger.error(f"Category {new_name} not found in dataset")
+        for ann in self.data.dataset['annotations']:
+            if ann['category_id'] == old_id:
+                ann['category_id'] = new_id
+        self.data.createIndex()
     
-    # def _updateIndex(self,imgIndex:Optional[int]=None,annIndex:Optional[int]=None):
-    #     """
-    #     更新数据集索引
-    #     """
+    def _updateIndex(self,imgIndex:Optional[int]=None,annIndex:Optional[int]=None):
+        """
+        更新数据集索引
+        """
 
-    #     imgIndex = imgIndex or 1
-    #     if imgIndex < 1:
-    #         raise ValueError("imgIndex must be greater than 0")
-    #     annIndex = annIndex or 1
-    #     if annIndex < 1:
-    #         raise ValueError("annIndex must be greater than 0")
+        imgIndex = imgIndex or 1
+        if imgIndex < 1:
+            raise ValueError("imgIndex must be greater than 0")
+        annIndex = annIndex or 1
+        if annIndex < 1:
+            raise ValueError("annIndex must be greater than 0")
 
-    #     if not self.data:
-    #         return
+        if not self.data:
+            return
             
-    #     img_id_map = {}
-    #     for img in self.data.dataset['images']:
-    #         img_id_map[img['id']] = imgIndex
-    #         img['id'] = imgIndex
-    #         imgIndex += 1
+        img_id_map = {}
+        for img in self.data.dataset['images']:
+            img_id_map[img['id']] = imgIndex
+            img['id'] = imgIndex
+            imgIndex += 1
             
-    #     for img_ann in self.data.dataset['annotations']:
-    #         if img_ann['image_id'] in img_id_map:
-    #             img_ann['image_id'] = img_id_map[img_ann['image_id']]
-    #         else:
-    #             logger.warning(f"Image ID {img_ann['image_id']} not found in img_id_map")
+        for img_ann in self.data.dataset['annotations']:
+            if img_ann['image_id'] in img_id_map:
+                img_ann['image_id'] = img_id_map[img_ann['image_id']]
+            else:
+                logger.warning(f"Image ID {img_ann['image_id']} not found in img_id_map")
 
 
-    #     ann_id_map = {} # old: new                
-    #     for anns in self.data.dataset['annotations']:
-    #         ann_id_map[anns['id']] = annIndex
-    #         anns['id'] = annIndex
-    #         annIndex += 1
+        ann_id_map = {} # old: new                
+        for anns in self.data.dataset['annotations']:
+            ann_id_map[anns['id']] = annIndex
+            anns['id'] = annIndex
+            annIndex += 1
         
-    #     self.data.createIndex()
+        self.data.createIndex()
 
+    def re_index(self):
+        """
+        重建索引,序号重置
+        """
+        self._updateIndex()
+    
+    def _merge(self,other:COCOX,cat_keep:Optional[bool]=None,overwrite:Optional[bool]=None):
+        """合并两个数据集,不能为空
 
-    # def _merge(self,other:COCOX,cat_keep:Optional[bool]=None,overwrite:Optional[bool]=None):
-    #     """合并两个数据集,不能为空
+        Args:
+            other (COCOX): 要合并的数据集对象
+            cat_keep (Optional[bool], optional): 类别保留方式. 
+                True: 以self为主,保留self的类别ID,对other的类别重新编号
+                False: 以other为主,保留other的类别ID,对self的别重新编号
+                默认为True
+            overwrite (Optional[bool], optional): 当发现重复图片时是否覆盖.
+                True: 使用other中的图片信息覆盖self中的重复图片
+                False: 保留self中的图片信息
+                默认为False
 
-    #     Args:
-    #         other (COCOX): 要合并的数据集对象
-    #         cat_keep (Optional[bool], optional): 类别保留方式. 
-    #             True: 以self为主,保留self的类别ID,对other的类别重新编号
-    #             False: 以other为主,保留other的类别ID,对self的别重新编号
-    #             默认为True
-    #         overwrite (Optional[bool], optional): 当发现重复图片时是否覆盖.
-    #             True: 使用other中的图片信息覆盖self中的重复图片
-    #             False: 保留self中的图片信息
-    #             默认为False
-
-    #     Note:
-    #         - 该函数会修改self和other的数据
-    #         - 合并后的数据存储在self中
-    #         - 合并过程包括:
-    #             1. 对齐两个数据集的类别
-    #             2. 重新编号图片ID和标注ID
-    #             3. 合并图片信息和标注信息
-    #     """
-    #     # 如果self.data为空，直接使用other的数据
-    #     if not self.data:
-    #         self.data = other.data
-    #         return
+        Note:
+            - 该函数会修改self和other的数据
+            - 合并后的数据存储在self中
+            - 合并过程包括:
+                1. 对齐两个数据集的类别
+                2. 重新编号图片ID和标注ID
+                3. 合并图片信息和标注信息
+        """
+        # 如果self.data为空，直接使用other的数据
+        if not self.data:
+            self.data = other.data
+            return
         
-    #     # 如果other.data为空，保持self.data不变
-    #     if not other.data:
-    #         return
+        # 如果other.data为空，保持self.data不变
+        if not other.data:
+            return
             
-    #     cat_keep = cat_keep or True
-    #     overwrite = overwrite or False
+        cat_keep = cat_keep or True
+        overwrite = overwrite or False
         
-    #     # 获取other数据集的类别字典
-    #     other_cat = {cat['id']: cat['name'] for cat in other.data.dataset['categories']}
-    #     # 对齐两个数据集的类别
-    #     new_cat = self.align_cat(other_cat=other_cat,cat_keep=cat_keep)
+        # 获取other数据集的类别字典
+        other_cat = {cat['id']: cat['name'] for cat in other.data.dataset['categories']}
+        # 对齐两个数据集的类别
+        new_cat = self.align_cat(other_cat=other_cat,cat_keep=cat_keep)
         
-    #     # 获取当前数据集的图片列表和other数据集的图片ID列表
-    #     raw_imglist = self._get_imglist()
-    #     other_imgidlist = [img['id'] for img in other.data.dataset['images']]
+        # 获取当前数据集的图片列表和other数据集的图片ID列表
+        raw_imglist = self._get_imglist()
+        other_imgidlist = [img['id'] for img in other.data.dataset['images']]
         
-    #     # 更新两个数据集的类别信息
-    #     self.update_cat(new_cat=new_cat)
-    #     other.update_cat(new_cat=new_cat)
+        # 更新两个数据集的类别信息
+        self.update_cat(new_cat=new_cat)
+        other.update_cat(new_cat=new_cat)
         
-    #     # 重新编号图片ID和标注ID
-    #     if cat_keep:
-    #         # 以self为主,self从1开始编号,other接着编号
-    #         self._updateIndex(imgIndex=1,annIndex=1)
-    #         other._updateIndex(imgIndex=len(self.data.imgs)+1,annIndex=len(self.data.anns)+1)
-    #     else:
-    #         # 以other为主,other从1开始编号,self接着编号
-    #         other._updateIndex(imgIndex=1,annIndex=1)
-    #         self._updateIndex(imgIndex=len(other.data.imgs)+1,annIndex=len(other.data.anns)+1)
+        # 重新编号图片ID和标注ID
+        if cat_keep:
+            # 以self为主,self从1开始编号,other接着编号
+            self._updateIndex(imgIndex=1,annIndex=1)
+            other._updateIndex(imgIndex=len(self.data.imgs)+1,annIndex=len(self.data.anns)+1)
+        else:
+            # 以other为主,other从1开始编号,self接着编号
+            other._updateIndex(imgIndex=1,annIndex=1)
+            self._updateIndex(imgIndex=len(other.data.imgs)+1,annIndex=len(other.data.anns)+1)
         
-    #     # 合并图片信息
-    #     duplicate_count = 0
-    #     for img in other.data.dataset['images']:
-    #         if img['file_name'] in raw_imglist:
-    #             duplicate_count += 1
-    #             if overwrite:
-    #                 self.data.dataset['images'].append(img)
-    #         else:
-    #             self.data.dataset['images'].append(img)
+        # 合并图片信息
+        duplicate_count = 0
+        for img in other.data.dataset['images']:
+            if img['file_name'] in raw_imglist:
+                duplicate_count += 1
+                if overwrite:
+                    self.data.dataset['images'].append(img)
+            else:
+                self.data.dataset['images'].append(img)
         
-    #     if duplicate_count > 0:
-    #         logger.debug(f"Found {duplicate_count} duplicate images")
+        if duplicate_count > 0:
+            logger.debug(f"Found {duplicate_count} duplicate images")
 
-    #     # 合并标注信息
-    #     for ann in other.data.dataset['annotations']:
-    #         img_id = ann['image_id']
-    #         # 获取对应图片的文件名
-    #         img_name = next((img['file_name'] for img in other.data.dataset['images'] 
-    #                         if img['id'] == img_id), None)
-    #         if img_name:
-    #             # 检查该图片是否在合并后的数据集中
-    #             merged_img = next((img for img in self.data.dataset['images'] 
-    #                              if img['file_name'] == img_name), None)
-    #             if merged_img:
-    #                 # 更新标注的image_id为合并后数据集中的id
-    #                 ann['image_id'] = merged_img['id']
-    #                 self.data.dataset['annotations'].append(ann)
+        # 合并标注信息
+        for ann in other.data.dataset['annotations']:
+            img_id = ann['image_id']
+            # 获取对应图片的文件名
+            img_name = next((img['file_name'] for img in other.data.dataset['images'] 
+                            if img['id'] == img_id), None)
+            if img_name:
+                # 检查该图片是否在合并后的数据集中
+                merged_img = next((img for img in self.data.dataset['images'] 
+                                 if img['file_name'] == img_name), None)
+                if merged_img:
+                    # 更新标注的image_id为合并后数据集中的id
+                    ann['image_id'] = merged_img['id']
+                    self.data.dataset['annotations'].append(ann)
 
-    #     # 重建索引
-    #     self.data.createIndex()
+        # 重建索引
+        self.data.createIndex()
         
-    # def merge(self,
-    #           others:Union[COCOX,List[COCOX]],
-    #           cat_keep:Optional[bool]=None,
-    #           overwrite:Optional[bool]=None,
-    #           dst_file:Optional[CCX]=None,
-    #           save_img:bool=True):
-    #     """
-    #     Merge multiple datasets into one, self can be empty
-    #     Args:
-    #         cat_keep: Category retention mode, True: keep self's categories, False: keep other's categories
-    #         overwrite: Whether to overwrite when image name exists
-    #         dst_file: Destination file configuration
-    #         save_img: Whether to save images
-    #     Returns:
-    #         COCOX: New merged dataset object
-    #     """
-    #     try:
-    #         if save_img and not dst_file:
-    #             logger.warning("="*40+"\n"+"Warning: When saving images (save_img=True), dst_file need to be specified to ensure complete data saving"+"\n"+"="*40)
+    def merge(self,
+              others:Union[COCOX,List[COCOX]],
+              cat_keep:Optional[bool]=None,
+              overwrite:Optional[bool]=None,
+              dst_file:Optional[CCX]=None,
+              save_img:bool=True):
+        """
+        Merge multiple datasets into one, self can be empty
+        Args:
+            cat_keep: Category retention mode, True: keep self's categories, False: keep other's categories
+            overwrite: Whether to overwrite when image name exists
+            dst_file: Destination file configuration, if not specified, the current object will be used
+            save_img: Whether to save images
+        Returns:
+            COCOX: New merged dataset object
+        """
+        try:
+            if save_img and not dst_file:
+                logger.warning("="*40+"\n"+"Warning: When saving images (save_img=True), dst_file need to be specified to ensure complete data saving"+"\n"+"="*40)
                 
-    #         if isinstance(others,COCOX):
-    #             others = [others]
+            if isinstance(others,COCOX):
+                others = [others]
 
-    #         # Create new object or use current object
-    #         obj = COCOX(data=self, cfg=dst_file if dst_file else None)
-    #         if obj.data and save_img:
-    #             try:
-    #                 obj.save_img()
-    #             except Exception as e:
-    #                 logger.error(f"Failed to save images: {e}")
+            # Create new object or use current object
+            obj = COCOX(data=self, cfg=dst_file if dst_file else None)
+            if obj.data and save_img:
+                try:
+                    obj.save_img()
+                except Exception as e:
+                    logger.error(f"Failed to save images: {e}")
             
-    #         # Initialize statistics data
-    #         static_data = {
-    #             'imgs': 0,
-    #             'anns': 0,
-    #             'cats': {},  # Use dict instead of list for category counts
-    #             'img_in_ann': 0,
-    #             'img_in_folder': 0
-    #         }
+            # Initialize statistics data
+            static_data = {
+                'imgs': 0,
+                'anns': 0,
+                'cats': {},  # Use dict instead of list for category counts
+                'img_in_ann': 0,
+                'img_in_folder': 0
+            }
 
-    #         # Get initial object statistics
-    #         if obj.data:
-    #             try:
-    #                 init_stats = obj.static()
-    #                 static_data.update({
-    #                     'imgs': init_stats['imgs'],
-    #                     'anns': init_stats['anns'],
-    #                     'cats': init_stats['cats'].copy(),
-    #                     'img_in_ann': init_stats['img_in_ann'],
-    #                     'img_in_folder': init_stats.get('img_in_folder', 0)
-    #                 })
-    #             except Exception as e:
-    #                 logger.error(f"Failed to get initial statistics: {e}")
+            # Get initial object statistics
+            if obj.data:
+                try:
+                    init_stats = obj.static()
+                    static_data.update({
+                        'imgs': init_stats['imgs'],
+                        'anns': init_stats['anns'],
+                        'cats': init_stats['cats'].copy(),
+                        'img_in_ann': init_stats['img_in_ann'],
+                        'img_in_folder': init_stats.get('img_in_folder', 0)
+                    })
+                except Exception as e:
+                    logger.error(f"Failed to get initial statistics: {e}")
             
-    #         # Merge other datasets
-    #         for other in others:
-    #             try:
-    #                 # Get current dataset statistics
-    #                 other_stats = other.static()
-    #                 logger.debug(f"Merging dataset: {other.cfg.ROOT} with {other_stats['imgs']} images, "
-    #                           f"{other_stats['anns']} annotations, {len(other_stats['cats'])} categories")
+            # Merge other datasets
+            for tmp_other in others:
+                other = copy.deepcopy(tmp_other)
+                try:
+                    # Get current dataset statistics
+                    other_stats = other.static()
+                    logger.debug(f"Merging dataset: {other.cfg.ROOT} with {other_stats['imgs']} images, "
+                              f"{other_stats['anns']} annotations, {len(other_stats['cats'])} categories")
                     
-    #                 # Execute merge
-    #                 obj._merge(other=other, cat_keep=cat_keep, overwrite=overwrite)
-    #                 obj.cfg.IMGDIR_SRC = other.cfg.ROOT.joinpath(other.cfg.IMGDIR)
-    #                 if save_img:    
-    #                     obj.save_img()
+                    # Execute merge
+                    obj._merge(other=other, cat_keep=cat_keep, overwrite=overwrite)
+                    obj.cfg.IMGDIR_SRC = other.cfg.ROOT.joinpath(other.cfg.IMGDIR).joinpath(other.cfg.IMGFOLDER)
+                    if save_img:    
+                        obj.save_img()
                     
-    #                 # Update statistics
-    #                 static_data['imgs'] += other_stats['imgs']
-    #                 static_data['anns'] += other_stats['anns']
-    #                 static_data['img_in_ann'] += other_stats['img_in_ann']
-    #                 static_data['img_in_folder'] += other_stats.get('img_in_folder', 0)
+                    # Update statistics
+                    static_data['imgs'] += other_stats['imgs']
+                    static_data['anns'] += other_stats['anns']
+                    static_data['img_in_ann'] += other_stats['img_in_ann']
+                    static_data['img_in_folder'] += other_stats.get('img_in_folder', 0)
                     
-    #                 # Merge category statistics
-    #                 for cat_name, count in other_stats['cats'].items():
-    #                     static_data['cats'][cat_name] = static_data['cats'].get(cat_name, 0) + count
+                    # Merge category statistics
+                    for cat_name, count in other_stats['cats'].items():
+                        static_data['cats'][cat_name] = static_data['cats'].get(cat_name, 0) + count
 
-    #             except Exception as e:
-    #                 logger.error(f"Failed to merge dataset {other.cfg.ROOT}: {e}")
-    #                 continue
+                except Exception as e:
+                    logger.error(f"Failed to merge dataset {other.cfg.ROOT}: {e}")
+                    continue
 
-    #         logger.info(f"Total after merging: {static_data['imgs']} images, {static_data['anns']} annotations, "
-    #                   f"{len(static_data['cats'])} categories, {static_data['img_in_ann']} annotated images")
+            logger.info(f"Total after merging: {static_data['imgs']} images, {static_data['anns']} annotations, "
+                      f"{len(static_data['cats'])} categories, {static_data['img_in_ann']} annotated images")
             
-    #         # Validate final merge results
-    #         try:
-    #             final_stats = obj.static()
-    #             logger.info(f"Final merged dataset: {final_stats['imgs']} images, {final_stats['anns']} annotations, "
-    #                       f"{len(final_stats['cats'])} categories, {final_stats['img_in_ann']} annotated images")
-    #         except Exception as e:
-    #             logger.error(f"Failed to get final statistics: {e}")
-    #         obj._updateIndex()
-    #         return obj
+            # Validate final merge results
+            try:
+                final_stats = obj.static()
+                logger.info(f"Final merged dataset: {final_stats['imgs']} images, {final_stats['anns']} annotations, "
+                          f"{len(final_stats['cats'])} categories, {final_stats['img_in_ann']} annotated images")
+            except Exception as e:
+                logger.error(f"Failed to get final statistics: {e}")
+            obj._updateIndex()
+            return obj
             
-    #     except Exception as e:
-    #         logger.error(f"Error occurred during dataset merge: {e}")
-    #         return None
+        except Exception as e:
+            logger.error(f"Error occurred during dataset merge: {e}")
+            return None
 
-    # def _filter(self, catIds: Optional[List[int]] = [], imgIds: Optional[List[int]] = [], annIds: Optional[List[int]] = [], mod:Optional[str]="and")->List[int]:
-    #     """
-    #     过滤数据集
-    #     mod: 过滤方式, "and": 同时满足, "or": 满足其一的并集
-    #     """
-    #     if mod == "and":
-    #         return self._filter_and(catIds=catIds,imgIds=imgIds,annIds=annIds)
-    #     elif mod == "or":
-    #         return self._filter_or(catIds=catIds,imgIds=imgIds,annIds=annIds)
-    #     else:
-    #         raise ValueError(f"Invalid mod: {mod}")
+    def _filter(self, catIds: Optional[List[int]] = [], imgIds: Optional[List[int]] = [], annIds: Optional[List[int]] = [], mod:Optional[str]="and")->List[int]:
+        """
+        过滤数据集
+        mod: 过滤方式, "and": 同时满足, "or": 满足其一的并集
+        """
+        if mod == "and":
+            return self._filter_and(catIds=catIds,imgIds=imgIds,annIds=annIds)
+        elif mod == "or":
+            return self._filter_or(catIds=catIds,imgIds=imgIds,annIds=annIds)
+        else:
+            raise ValueError(f"Invalid mod: {mod}")
 
     
-    # def _filter_and(self, catIds: Optional[List[int]] = [], imgIds: Optional[List[int]] = [], annIds: Optional[List[int]] = [])->List[int]:
-    #     """
-    #     根据条件过滤信息获取标注id,同时对于为[]的条件，则表示忽略
-    #     """
-    #     # 获取所有标注id
-    #     final_annIds = self.data.getAnnIds()
+    def _filter_and(self, catIds: Optional[List[int]] = [], imgIds: Optional[List[int]] = [], annIds: Optional[List[int]] = [])->List[int]:
+        """
+        根据条件过滤信息获取标注id,同时对于为[]的条件，则表示忽略
+        """
+        # 获取所有标注id
+        final_annIds = self.data.getAnnIds()
         
-    #     # 如果指定了图片id,则过滤
-    #     if imgIds:
-    #         img_annIds = self.data.getAnnIds(imgIds=imgIds)
-    #         final_annIds = [ann for ann in final_annIds if ann in img_annIds]
+        # 如果指定了图片id,则过滤
+        if imgIds:
+            img_annIds = self.data.getAnnIds(imgIds=imgIds)
+            final_annIds = [ann for ann in final_annIds if ann in img_annIds]
             
-    #     # 如果指定了类别id,则过滤    
-    #     if catIds:
-    #         cat_annIds = self.data.getAnnIds(catIds=catIds)
-    #         final_annIds = [ann for ann in final_annIds if ann in cat_annIds]
+        # 如果指定了类别id,则过滤    
+        if catIds:
+            cat_annIds = self.data.getAnnIds(catIds=catIds)
+            final_annIds = [ann for ann in final_annIds if ann in cat_annIds]
             
-    #     # 如果指定了标注id,则过滤
-    #     if annIds:
-    #         final_annIds = [ann for ann in final_annIds if ann in annIds]
+        # 如果指定了标注id,则过滤
+        if annIds:
+            final_annIds = [ann for ann in final_annIds if ann in annIds]
             
-    #     return final_annIds
+        return final_annIds
     
-    # def _filter_or(self, catIds: Optional[List[int]] = [], imgIds: Optional[List[int]] = [], annIds: Optional[List[int]] = [])->List[int]:
-    #     """
-    #     根据条件过滤信息获取标注id,满足任一条件的并集
-    #     为空的条件表示不获取任何值
-    #     """
-    #     # 分别获取满足每个条件的标注id
-    #     res_cats = self._filter_and(catIds=catIds) if catIds else []  # 满足类别条件的标注id
-    #     res_imgs = self._filter_and(imgIds=imgIds) if imgIds else []  # 满足图片条件的标注id 
-    #     res_anns = self._filter_and(annIds=annIds) if annIds else []  # 满足标注id条件的标注id
+    def _filter_or(self, catIds: Optional[List[int]] = [], imgIds: Optional[List[int]] = [], annIds: Optional[List[int]] = [])->List[int]:
+        """
+        根据条件过滤信息获取标注id,满足任一条件的并集
+        为空的条件表示不获取任何值
+        """
+        # 分别获取满足每个条件的标注id
+        res_cats = self._filter_and(catIds=catIds) if catIds else []  # 满足类别条件的标注id
+        res_imgs = self._filter_and(imgIds=imgIds) if imgIds else []  # 满足图片条件的标注id 
+        res_anns = self._filter_and(annIds=annIds) if annIds else []  # 满足标注id条件的标注id
         
-    #     # 计算所有满足条件的标注id的并集
-    #     final_annIds = set(res_cats) | set(res_imgs) | set(res_anns)
-    #     return list(final_annIds)
+        # 计算所有满足条件的标注id的并集
+        final_annIds = set(res_cats) | set(res_imgs) | set(res_anns)
+        return list(final_annIds)
     
-    # def _get_imgIds_by_annIds(self,annIds:List[int])->List[int]:
-    #     """
-    #     根据annIds获取图片id
-    #     """
-    #     if not self.data:
-    #         return []
-    #     return list(set([ann['image_id'] for ann in self.data.dataset['annotations'] if ann['id'] in annIds]))
+    def _get_imgIds_by_annIds(self,annIds:List[int])->List[int]:
+        """
+        根据annIds获取图片id
+        """
+        if not self.data:
+            return []
+        return list(set([ann['image_id'] for ann in self.data.dataset['annotations'] if ann['id'] in annIds]))
     
     def _get_catIds_by_annIds(self,annIds:List[int])->List[int]:
         """
@@ -1279,94 +1339,111 @@ class COCOX(BaseModel):
         
         return res_catIds,res_imgIds,res_annIds
     
-    # def _gen_dict(self,catIds:List[int],imgIds:List[int],annIds:List[int],alignCat:bool=True,keep_all_img:bool=True)->dict:
-    #     if not keep_all_img and (not catIds or not self.data):
-    #         return {}
-    #     new_dataset = {
-    #         'info': self.data.dataset.get('info',[]),
-    #         'licenses': self.data.dataset.get('licenses',[]),
-    #         'images': [img for img in self.data.dataset['images'] if img['id'] in imgIds],
-    #         'annotations': [ann for ann in self.data.dataset['annotations'] if ann['id'] in annIds],
-    #         'categories': [cat for cat in self.data.dataset['categories'] if cat['id'] in catIds]
-    #     }
-    #     if isinstance(alignCat,bool):
-    #         new_dataset['categories'] = [cat for cat in self.data.dataset['categories']]
+    def _gen_dict(self,catIds:List[int],imgIds:List[int],annIds:List[int],alignCat:bool=True,keep_all_img:bool=True)->dict:
+        if not keep_all_img and (not catIds or not self.data):
+            return {}
+        new_dataset = {
+            'info': self.data.dataset.get('info',[]),
+            'licenses': self.data.dataset.get('licenses',[]),
+            'images': [img for img in self.data.dataset['images'] if img['id'] in imgIds],
+            'annotations': [ann for ann in self.data.dataset['annotations'] if ann['id'] in annIds],
+            'categories': [cat for cat in self.data.dataset['categories'] if cat['id'] in catIds]
+        }
+        if isinstance(alignCat,bool):
+            new_dataset['categories'] = [cat for cat in self.data.dataset['categories']]
 
-    #     return new_dataset
+        return new_dataset
 
-    # def filter(self, 
-    #            cats: Optional[List[Union[int,str]]] = [], 
-    #            imgs: Optional[List[Union[int,str]]] = [], 
-    #            annIds: Optional[List[int]] = [], 
-    #            mod:Optional[str]="and", 
-    #            level:str="img",
-    #            revert:bool=False,
-    #            dst_file:Optional[COCOX]=None,
-    #            alignCat:bool=True,
-    #            keep_all_img:bool=False, # 会将所有的数据保留下来
-    #            )->Union[COCOX,None]:
-    #     """
-    #     过滤数据集,支持多种过滤方式:
-    #     - 图像: 支持id或文件名模糊搜索
-    #     - 类别: 支持id或名称搜索
-    #     - 标注: 支持标注id过滤
+    def filter(self, 
+               cats: Optional[List[Union[int,str]]] = [], 
+               imgs: Optional[List[Union[int,str]]] = [], 
+               annIds: Optional[List[int]] = [], 
+               mod:Optional[str]="and", 
+               level:str="img",
+               revert:bool=False,
+               dst_file:Optional[COCOX]=None,
+               alignCat:bool=True,
+               keep_all_img:bool=False, # 会将所有的数据保留下来
+               keep_empty_img:bool=True, # 是否保留没有标注的图片
+               )->Union[COCOX,None]:
+        """
+        过滤数据集,支持多种过滤方式:
+        - 图像: 支持id或文件名模糊搜索
+        - 类别: 支持id或名称搜索
+        - 标注: 支持标注id过滤
 
-    #     参数:
-    #         cats (List[Union[int,str]], optional): 类别id或名称列表,默认为空列表
-    #         imgs (List[Union[int,str]], optional): 图像id或文件名列表,默认为空列表
-    #         annIds (List[int], optional): 标注id列表,默认为空列表
-    #         mod (str, optional): 过滤模式,"and"表示同时满足所有条件,"or"表示满足任一条件,默认为"and"
-    #         level (str, optional): 过滤级别,"img"表示按图片过滤,"ann"表示按标注过滤,默认为"img"
-    #         revert (bool, optional): 是否反向过滤,默认为False
-    #         dst_file (Optional[COCOX], optional): 目标COCOX对象,用于指定保存路径,默认为None
-    #         alignCat (bool, optional): 是否对齐类别,True表示保留所有类别,默认为True
-    #         keep_all_img (bool, optional): 是否保留所有图片,True表示保留所有图片但只保留符合条件的标注,默认为True
+        参数:
+            cats (List[Union[int,str]], optional): 类别id或名称列表,默认为空列表
+            imgs (List[Union[int,str]], optional): 图像id或文件名列表,默认为空列表
+            annIds (List[int], optional): 标注id列表,默认为空列表
+            mod (str, optional): 过滤模式,"and"表示同时满足所有条件,"or"表示满足任一条件,默认为"and"
+            level (str, optional): 过滤级别,"img"表示按图片过滤,"ann"表示按标注过滤,默认为"img"
+            revert (bool, optional): 是否反向过滤,默认为False
+            dst_file (Optional[COCOX], optional): 目标COCOX对象,用于指定保存路径,默认为None
+            alignCat (bool, optional): 是否对齐类别,True表示保留所有类别,默认为True
+            keep_all_img (bool, optional): 是否保留所有图片,True表示保留所有图片但只保留符合条件的标注,默认为True
 
-    #     返回:
-    #         Union[dict,COCOX]: 返回过滤后的COCOX对象
+        返回:
+            Union[dict,COCOX]: 返回过滤后的COCOX对象
             
-    #     TODO: 增加未标注数据作为负样本，特别是公式检测，需要设置数量或则比例
-    #     """
+        TODO: 增加未标注数据作为负样本，特别是公式检测，需要设置数量或则比例
+        如果图片没有标注，这里会被过滤掉
+        """
                
-    #     # 获取id
-    #     imgIds = [self._get_img(img,return_id=True)[1] for img in imgs if self._get_img(img,return_id=True)[0]]
-    #     catIds = [self._get_cat(cat,return_id=True)[1] for cat in cats if self._get_cat(cat,return_id=True)[0]]
-        
-    #     dst_annIds = self._filter(catIds=catIds, imgIds=imgIds, annIds=annIds,mod=mod)
-        
-    #     # 如果过滤后没有数据，返回空字典或空对象
-    #     if not dst_annIds and not keep_all_img:
-    #         return COCOX(data=None, cfg=dst_file if dst_file else None)
-        
-    #     # 创建新对象,并更新配置
-    #     obj = COCOX(data=self, cfg=dst_file if dst_file else None)
-    #     if dst_file:
-    #         obj.cfg = dst_file
-            
-    #     if revert:
-    #         if level == "ann":
-    #             all_annIds = [ann['id'] for ann in obj.data.dataset['annotations']] 
-    #             dst_annIds = set(all_annIds) - set(dst_annIds)
-    #         elif level == "img":
-    #             # 获取图片id 
-    #             _,dst_imgIds,_ = obj._get_data(annIds=dst_annIds,level=level)
-    #             all_imgIds = [img['id'] for img in obj.data.dataset['images']] 
-    #             dst_imgIds = set(all_imgIds) - set(dst_imgIds)
-    #             dst_annIds = self._filter(imgIds=dst_imgIds)
+        # 获取id
+        imgIds = [self._get_img(img,return_id=True)[1] for img in imgs if self._get_img(img,return_id=True)[0]]
+        catIds = [self._get_cat(cat,return_id=True)[1] for cat in cats if self._get_cat(cat,return_id=True)[0]]
+        # 获取没有标注的图片ID
+        no_ann_imgIds = []
+        for img in self.data.dataset['images']:
+            img_id = img['id']
+            # 检查该图片ID是否有对应的标注
+            if not self.data.getAnnIds(imgIds=[img_id]) and (img_id in imgIds):
+                no_ann_imgIds.append(img_id)
                 
-    #     dst_catIds,dst_imgIds,dst_annIds = obj._get_data(annIds=dst_annIds,level=level)
+        dst_annIds = self._filter(catIds=catIds, imgIds=imgIds, annIds=annIds,mod=mod)
         
-    #     # 如果keep_all_img为True,保留所有图片
-    #     if keep_all_img:
-    #         dst_imgIds = [img['id'] for img in obj.data.dataset['images']]
+        # 如果过滤后没有数据，返回空字典或空对象
+        if not dst_annIds and not keep_all_img:
+            return COCOX(data=None, cfg=dst_file if dst_file else None)
+        
+        # 创建新对象,并更新配置
+        obj = COCOX(data=self, cfg=dst_file if dst_file else None)
+        # 一般为self的IMGDIR_SRC
+        obj.cfg.IMGDIR_SRC = self.cfg.IMGDIR_SRC
+        if dst_file:
+            obj.cfg = dst_file
+            obj.cfg.IMGDIR_SRC = copy.deepcopy(self.cfg.IMGDIR_SRC)
             
-    #     dst_dict = obj._gen_dict(catIds=dst_catIds,imgIds=dst_imgIds,annIds=dst_annIds,alignCat=alignCat)
-    #     # 将coco字典转换为对象
-    #     obj.data = obj.dict2_(dst_dict)
+        if revert:
+            if level == "ann":
+                all_annIds = [ann['id'] for ann in obj.data.dataset['annotations']] 
+                dst_annIds = set(all_annIds) - set(dst_annIds)
+            elif level == "img":
+                # 获取图片id 
+                _,dst_imgIds,_ = obj._get_data(annIds=dst_annIds,level=level)
+                all_imgIds = [img['id'] for img in obj.data.dataset['images']] 
+                dst_imgIds = set(all_imgIds) - set(dst_imgIds)
+                dst_annIds = self._filter(imgIds=dst_imgIds)
+                
+        dst_catIds,dst_imgIds,dst_annIds = obj._get_data(annIds=dst_annIds,level=level)
         
-    #     static_data = obj.static()
-    #     logger.info(f"{obj.cfg.ROOT.joinpath(obj.cfg.ANNDIR).joinpath(obj.cfg.ANNFILE)}[{type(obj.data).__name__ if obj.data else 'None'}]: Images:{static_data['imgs']}, Annotations:{static_data['anns']}, Categories:{len(static_data['cats'])}")
-    #     return obj
+        # 如果keep_all_img为True,保留所有图片
+        if keep_all_img:
+            dst_imgIds = [img['id'] for img in obj.data.dataset['images']]
+        # 保留没有标注的图片
+        if keep_empty_img:
+            dst_imgIds = set(dst_imgIds+no_ann_imgIds)
+         
+        dst_dict = obj._gen_dict(catIds=dst_catIds,imgIds=dst_imgIds,annIds=dst_annIds,alignCat=alignCat)
+        # 将coco字典转换为对象
+        obj.data = obj.dict2_(dst_dict)
+        
+        # static_data = obj.static()
+        # logger.info(f"{obj.cfg.ROOT.joinpath(obj.cfg.ANNDIR).joinpath(obj.cfg.ANNFILE)}[{type(obj.data).__name__ if obj.data else 'None'}]: Images:{static_data['imgs']}, Annotations:{static_data['anns']}, Categories:{len(static_data['cats'])}")
+        
+        obj._updateIndex()
+        return obj
        
  
     # def correct(self, api_url:Callable, cats:Union[int,str,list], dst_file:Optional[CCX]=None):
@@ -1410,223 +1487,124 @@ class COCOX(BaseModel):
 
     #     return obj
 
-    # @staticmethod
-    # def _split(imglists:List[str],ratio:Union[List[float],int]=[0.7,0.2,0.1],by_file=False):
-    #     # 检查ratio是否为整数
-    #     if isinstance(ratio, int):
-    #         # 如果是整数,生成等比例的ratio列表
-    #         ratio = [1/ratio] * ratio
+    @staticmethod
+    def _split(imglists:List[str],ratio:Union[List[float],int]=[0.7,0.2,0.1],by_file=False):
+        # 检查ratio是否为整数
+        if isinstance(ratio, int):
+            # 如果是整数,生成等比例的ratio列表
+            ratio = [1/ratio] * ratio
             
-    #     # 确保ratio之和为1
-    #     if abs(sum(ratio) - 1) > 0.0001:
-    #         ratio = [r/sum(ratio) for r in ratio]
+        # 确保ratio之和为1
+        if abs(sum(ratio) - 1) > 0.0001:
+            ratio = [r/sum(ratio) for r in ratio]
             
-    #     if by_file:
-    #         # 按文件名分组
-    #         samebooks = defaultdict(list)
-    #         for image in imglists:
-    #             match = re.match(r'(.+?)_(\d+)\..*', image)
-    #             if match:
-    #                 prefix, _ = match.groups()
-    #                 samebooks[prefix].append(image)
+        if by_file:
+            # 按文件名分组
+            samebooks = defaultdict(list)
+            for image in imglists:
+                match = re.match(r'(.+?)_(\d+)\..*', image)
+                if match:
+                    prefix, _ = match.groups()
+                    samebooks[prefix].append(image)
             
-    #         # 对每个文件组进行划分
-    #         split_data = defaultdict(list)
-    #         file_list = list(samebooks.keys())
+            # 对每个文件组进行划分
+            split_data = defaultdict(list)
+            file_list = list(samebooks.keys())
             
-    #         for file in file_list:
-    #             random.shuffle(samebooks[file])
-    #             start = 0
-    #             last_index = 0
-    #             for i,r in enumerate(ratio):
-    #                 end = start + int(len(samebooks[file])*r)
-    #                 split_data[i].extend(samebooks[file][start:end])
-    #                 start = end
-    #                 last_index = i
-    #             split_data[last_index].extend(samebooks[file][start:])
+            for file in file_list:
+                random.shuffle(samebooks[file])
+                start = 0
+                last_index = 0
+                for i,r in enumerate(ratio):
+                    end = start + int(len(samebooks[file])*r)
+                    split_data[i].extend(samebooks[file][start:end])
+                    start = end
+                    last_index = i
+                split_data[last_index].extend(samebooks[file][start:])
             
-    #         return [split_data[i] for i in range(len(ratio))]
+            return [split_data[i] for i in range(len(ratio))]
             
-    #     else:
-    #         # 直接对图片列表进行随机划分
-    #         random.shuffle(imglists)
-    #         total = len(imglists)
-    #         split_data = []
-    #         start = 0
-    #         for r in ratio:
-    #             end = start + int(total * r)
-    #             split_data.append(imglists[start:end])
-    #             start = end
-    #         split_data[-1].extend(imglists[start:])  # 将剩余的图片添加到最后一组
+        else:
+            # 直接对图片列表进行随机划分
+            random.shuffle(imglists)
+            total = len(imglists)
+            split_data = []
+            start = 0
+            for r in ratio:
+                end = start + int(total * r)
+                split_data.append(imglists[start:end])
+                start = end
+            split_data[-1].extend(imglists[start:])  # 将剩余的图片添加到最后一组
             
-    #         return split_data    
+            return split_data    
 
+    def split(self,ratio:List[float]=[0.7,0.2,0.1],by_file=False,dst_file:Optional[CCX]=None,ratio_name:Optional[List[str]]=None, merge:bool=False)->Dict[str,List[COCOX]]:
+        """
+        将数据集按照指定比例划分为训练集、验证集和测试集
 
-    # def split2(self,ratio:List[float]=[0.7,0.2,0.1],by_file=False,dst_file:Optional[CCX]=None,merge:bool=True)->List[COCOX]:
-    #     """
-    #     将数据集按照指定比例划为训练集、验证集和测试集
+        Args:
+            ratio (List[float]): 数据集划分比例，按照[训练集,验证集,测试集]顺序，默认[0.7,0.2,0.1]
+            by_file (bool): 是否按照文件名进行划分，True则同一文件的页面会被分到同一数据集，False则完全随机划分
+            dst_file (Optional[CCX]): 目标文件对象，用于指定保存划分后数据集的位置
+            ratio_name (List[str]): 数据集类型名称，默认["train","val","test"]
+            merge (bool): 是否将划分后的图像合并到同一文件夹下，True则合并，False则不合并
 
-    #     Args:
-    #         ratio (List[float]): 数据集划分比例，按照[训练集,验证集,测试集]顺序,默认[0.7,0.2,0.1]
-    #         by_file (bool): 是否按照PDF文件名进行划分,True则同一PDF的页面会被分到同一数据集,False则完全随机划分
-    #         newObj (Optional[COCOX]): 新的COCOX对象,用于保存划分后的数据集,实际只有ROOT有用，其他参数无效
-    #         visual (bool): 是否可视化显示划分结果，同时会保存数据
-    #         merge (bool): 是否将划分后的图像合并到同一文件夹下
+        Returns:
+            Dict[str,List[COCOX]]: 返回一个字典，键为数据集类型（如"train"、"val"、"test"），值为对应的COCOX对象
+        """
+        # 获取各集合的图片ID和标注ID
+        def get_ids(img_set):
+            if not img_set:
+                return [], []
+            img_ids = [obj._get_img(img,return_id=True)[1] for img in img_set]
+            ann_ids = obj.data.getAnnIds(imgIds=img_ids)
+            return img_ids, ann_ids
+        
+        # 生成数据字典并创建对象
+        def create_split_obj(cat_ids, img_ids, ann_ids, split_type):
+            split_dict = obj._gen_dict(catIds=cat_ids, imgIds=img_ids, annIds=ann_ids)
+            split_obj = copy.deepcopy(obj)
+            split_obj.cfg.ANNFILE = f"instances_{split_type}.json"
+            if merge:
+                split_obj.cfg.IMGFOLDER = Path(".")
+            else:
+                split_obj.cfg.IMGFOLDER = Path(split_type)
+            split_obj.data = split_obj.dict2_(split_dict)
+            return split_obj
+        
+        
+        obj = COCOX(data=self, cfg=dst_file if dst_file else None)
+        
+        imglists = obj._get_imglist()
+        split_sets = obj._split(imglists=imglists,ratio=ratio,by_file=by_file)  
+        
+        catIds = list(range(1,len(obj.data.dataset['categories'])+1))
+        all_split_objs = []
+        
+        if ratio_name is None:
+            if len(ratio) == 2:
+                split_types = ["train","val"]
+            elif len(ratio) == 3:
+                split_types = ["train","val","test"]
+            else:
+                split_types = [f"split{i}" for i in range(len(ratio))]
+        else:
+            # 确保ratio_name与ratio长度匹配，以ratio为准
+            if len(ratio_name) != len(ratio):
+                split_types = ratio_name[:len(ratio)] if len(ratio_name) > len(ratio) else ratio_name + [f"split_{i}" for i in range(len(ratio_name), len(ratio))]
+            else:
+                split_types = ratio_name            
 
-    #     Returns:
-    #         Union[Tuple[COCOX,COCOX,COCOX],Tuple[dict,dict,dict]]: 
-    #         如果merge=True,返回三个COCOX对象,分别对应训练集、验证集、测试集
-    #         如果merge=False,返回三个字典,包含各自数据集的图像信息
-    #     """
-    #     # 获取各集合的图片ID和标注ID
-    #     def get_ids(img_set):
-    #         if not img_set:
-    #             return [], []
-    #         img_ids = [obj._get_img(img,return_id=True)[1] for img in img_set]
-    #         ann_ids = obj.data.getAnnIds(imgIds=img_ids)
-    #         return img_ids, ann_ids
-        
-    #     # 生成数据字典并创建对象
-    #     def create_split_obj(cat_ids, img_ids, ann_ids, split_type):
-    #         split_dict = obj._gen_dict(catIds=cat_ids, imgIds=img_ids, annIds=ann_ids)
-    #         split_obj = copy.deepcopy(obj)
-    #         split_obj.cfg.ANNFILE = f"instances_{split_type}.json"
-    #         if merge:
-    #             split_obj.cfg.IMGDIR = f"{split_type}"
-    #         split_obj.data = split_obj.dict2_(split_dict)
-    #         return split_obj
-        
-        
-    #     obj = COCOX(data=self, cfg=dst_file if dst_file else None)
-        
-    #     imglists = obj._get_imglist()
-    #     split_sets = obj._split(imglists=imglists,ratio=ratio,by_file=by_file)  
-        
-    #     catIds = list(range(1,len(obj.data.dataset['categories'])+1))
-    #     all_split_objs = []
-        
-    #     if len(ratio) == 2:
-    #         split_types = ["train","val"]
-    #     elif len(ratio) == 3:
-    #         split_types = ["train","val","test"]
-    #     else:
-    #         split_types = [f"split_{i}" for i in range(len(ratio))]
             
-    #     for part_set,split_type in zip(split_sets,split_types):
-    #         imgIds,annIds = get_ids(part_set)
-    #         split_obj = create_split_obj(catIds,imgIds,annIds,split_type)
-    #         split_obj._updateIndex()
-    #         all_split_objs.append(split_obj)
+        for part_set,split_type in zip(split_sets,split_types):
+            imgIds,annIds = get_ids(part_set)
+            split_obj = create_split_obj(catIds,imgIds,annIds,split_type)
+            split_obj._updateIndex()
+            all_split_objs.append(split_obj)
             
-    #     return all_split_objs,split_types
-              
-    # def split(self,ratio:List[float]=[0.7,0.2,0.1],by_file=False,dst_file:Optional[CCX]=None,merge:bool=True)->Union[Tuple[COCOX,COCOX,COCOX],Tuple[dict,dict,dict]]:
-    #     """
-    #     将数据集按照指定比例划为训练集、验证集和测试集
-
-    #     Args:
-    #         ratio (List[float]): 数据集划分比例，按照[训练集,验证集,测试集]顺序,默认[0.7,0.2,0.1]
-    #         by_file (bool): 是否按照PDF文件名进行划分,True则同一PDF的页面会被分到同一数据集,False则完全随机划分
-    #         newObj (Optional[COCOX]): 新的COCOX对象,用于保存划分后的数据集,实际只有ROOT有用，其他参数无效
-    #         visual (bool): 是否可视化显示划分结果，同时会保存数据
-    #         merge (bool): 是否将划分后的图像合并到同一文件夹下
-
-    #     Returns:
-    #         Union[Tuple[COCOX,COCOX,COCOX],Tuple[dict,dict,dict]]: 
-    #         如果merge=True,返回三个COCOX对象,分别对应训练集、验证集、测试集
-    #         如果merge=False,返回三个字典,包含各自数据集的图像信息
-    #     """
-    #     obj = COCOX(data=self, cfg=dst_file if dst_file else None)
-        
-    #     imglists = obj._get_imglist()
-    #     total_imgs = len(imglists)
-
-    #     if by_file:
-    #         samebooks = defaultdict(list)
-    #         for image in imglists:
-    #             match = re.match(r'(.+?)_(\d+)\..*', image)
-    #             if match:
-    #                 prefix, page = match.groups()
-    #                 samebooks[prefix].append(image)
-    #         samebooks = dict(samebooks)
-            
-    #         # 对每个key下的数据进行划分
-    #         split_data = {}
-    #         for key, images in samebooks.items():
-    #             total = len(images)
-    #             train_end = int(total * ratio[0])
-                
-    #             if len(ratio) == 2:
-    #                 val_end = total  # 0.3包含剩余所有数据
-    #             else:
-    #                 val_end = int(total * (ratio[0] + ratio[1]))
-                
-    #             # 随机打乱图片列表
-    #             random.shuffle(images)
-                
-    #             # 划分数据
-    #             split_data[key] = {
-    #                 'train': images[:train_end],
-    #                 'val': images[train_end:val_end],
-    #                 'test': images[val_end:] if len(ratio) > 2 else []
-    #             }
-            
-    #         # 合并所有子列表
-    #         train_set = [img for key in split_data for img in split_data[key]['train']]
-    #         val_set = [img for key in split_data for img in split_data[key]['val']]
-    #         test_set = [img for key in split_data for img in split_data[key]['test']] if len(ratio) > 2 else []
-    #     else:
-    #         # 随机打乱图片列表
-    #         random.shuffle(imglists)
-            
-    #         train_end = int(total_imgs * ratio[0])
-            
-    #         if len(ratio) == 2:
-    #             # 两个数据集情况,val_set包含余所有数据
-    #             train_set = imglists[:train_end]
-    #             val_set = imglists[train_end:]
-    #             test_set = []
-    #         else:
-    #             # 三个数据集情况,test_set包含剩余所有数据
-    #             val_end = int(total_imgs * (ratio[0] + ratio[1]))
-    #             train_set = imglists[:train_end]
-    #             val_set = imglists[train_end:val_end]
-    #             test_set = imglists[val_end:]
-        
-        
-    #     # 获取各集合的图片ID和标注ID
-    #     def get_ids(img_set):
-    #         if not img_set:
-    #             return [], []
-    #         img_ids = [obj._get_img(img,return_id=True)[1] for img in img_set]
-    #         ann_ids = obj.data.getAnnIds(imgIds=img_ids)
-    #         return img_ids, ann_ids
-            
-    #     train_imgIds, train_annIds = get_ids(train_set)
-    #     val_imgIds, val_annIds = get_ids(val_set) 
-    #     test_imgIds, test_annIds = get_ids(test_set)
-        
-    #     # 所有集合共用相同的类别ID
-    #     cat_ids = list(range(1,len(obj.data.dataset['categories'])+1))
-        
-    #     # 生成数据字典并创建对象
-    #     def create_split_obj(img_ids, ann_ids, split_type):
-    #         split_dict = obj._gen_dict(catIds=cat_ids, imgIds=img_ids, annIds=ann_ids)
-    #         split_obj = copy.deepcopy(obj)
-    #         split_obj.cfg.ANNFILE = getattr(split_obj.cfg, f'ANNFILE_{split_type.upper()}')
-    #         if merge:
-    #             split_obj.cfg.IMGDIR = getattr(split_obj.cfg, f'IMGDIR_{split_type.upper()}')
-    #         split_obj.data = split_obj.dict2_(split_dict)
-    #         return split_obj
-            
-    #     train_obj = create_split_obj(train_imgIds, train_annIds, 'val')
-    #     val_obj = create_split_obj(val_imgIds, val_annIds, 'val')
-    #     test_obj = create_split_obj(test_imgIds, test_annIds, 'test')
-
-    #     train_obj._updateIndex()
-    #     val_obj._updateIndex()
-    #     test_obj._updateIndex()
-    #     return train_obj, val_obj, test_obj
+        # 将分割对象和类型组合为字典返回
+        return {split_type: split_obj for split_type, split_obj in zip(split_types, all_split_objs)}
+    
 
     # def img2coco(self,imgpath:str, img_id:int, dst_file:CCX=None):
     #     """
@@ -1665,4 +1643,135 @@ class COCOX(BaseModel):
     #     new_obj = COCOX(data=new_data, cfg=dst_file if dst_file else None)
         
     #     return new_obj
+    
+    def correct(self, 
+                callback: callable[[dict,dict],tuple[dict,dict]]=lambda img_input, ann_input: (img_input, ann_input),
+                dst_file:CCX=None,
+                **kwargs) -> tuple:
+        # 基于原标注进行修改，不修改原有数据
+        obj = COCOX(data=self, cfg=dst_file if dst_file else None)
 
+        
+        # 获取标签映射
+        map_cats = obj._get_map_cats()
+        # 获取所有图片id
+        imgIds = obj.data.getImgIds()      
+
+        for img_id in imgIds:
+            # 加载图片
+            img = obj.data.loadImgs(img_id)[0]
+            imgpath = obj.cfg.IMGDIR_SRC.joinpath(obj.cfg.IMGFOLDER).joinpath(img['file_name'])
+            
+            # 加载标注
+            annoIds = obj.data.getAnnIds(imgIds=img['id'])
+            anns = obj.data.loadAnns(annoIds)
+            
+            # 标注文件中包含的信息
+            ann_fields = ['category_id', 'bbox', 'segmentation', 'area', 'iscrowd', 'attributes']
+            img_fields = ['file_name', 'width', 'height']
+            
+            
+            
+            img_input = {} # 图片信息输入
+            ann_input = {} # 标注输入
+            
+            img_input = {   
+                'imgpath': imgpath,
+                'cats': map_cats,
+                'root': obj.cfg.ROOT,
+                'imgdir': obj.cfg.IMGDIR,
+                'imgfolder': obj.cfg.IMGFOLDER,
+            }
+            for field in img_fields:
+                if field in img:
+                    img_input[field] = img[field]
+            
+            # 为每个标注创建输入数据字典，非修改部分
+            for ann in anns:
+                # 添加标注的各个字段，修改部分
+                for field in ann_fields:
+                    if field in ann:
+                        # 确保ann_input中存在该id的键值对
+                        if ann['id'] not in ann_input:
+                            ann_input[ann['id']] = {}
+                        ann_input[ann['id']][field] = ann[field]
+            
+            global_info = {}
+            # 调用回调函数处理数据,避免原始数据被修改
+            result = callback(copy.deepcopy(img_input), copy.deepcopy(ann_input), **{**kwargs,**global_info})
+            
+            logger.info(f"global_info: {global_info}")
+            
+            if result is not None:
+                img_output, ann_output = result
+                # 更新图像数据
+                for field in img_fields:
+                    img[field] = img_output.get(field,img[field])
+                
+                # 更新标注数据
+                for ann in anns:
+                    ann_id = ann['id']
+                    # 只更新回调函数返回的字段
+                    for field in ann_fields:
+                        ann[field] = ann_output[ann_id].get(field, ann[field])
+                    
+   
+        return obj
+
+
+    def big_merge(self,
+                  roots: Union[str,Path,List[Union[str,Path]]],
+                  **kwargs):
+        
+        """
+        将多个目录下的COCO格式JSON文件合并为一个文件
+        
+        Args:
+            roots: 源目录路径，可以是单个路径或路径列表
+            **kwargs: 额外参数
+                - inc_key: 包含的JSON文件名模式，如['train', 'val']
+                - exc_key: 排除的JSON文件名模式，如['test']
+                - cat_keep: 是否保留原始类别ID，默认为True
+        
+        Returns:
+            COCOX: 合并后的COCOX对象
+        """
+        # 获取关键字参数
+        inc_key = kwargs.get('inc_key', None)  # 包含的JSON文件名模式
+        if inc_key and not isinstance(inc_key, list):
+            inc_key = [inc_key]
+        exc_key = kwargs.get('exc_key', None)  # 排除的JSON文件名模式
+        if exc_key and not isinstance(exc_key, list):
+            exc_key = [exc_key]
+
+            
+        logger.info(f"Merge parameters: inc_key={inc_key}, exc_key={exc_key}")
+        
+        # 将输入转换为List[Path]类型
+        if isinstance(roots, str) or isinstance(roots, Path):
+            roots = [Path(roots)]
+        else:
+            # 确保列表中的每个元素都是Path类型
+            roots = [Path(root) for root in roots]
+        
+        # 获取每个目录下所有的json文件
+        json_files = list()
+        for root in roots:
+            for json_file in list(Path(root).glob("**/*.json")):
+            # if root.is_dir():
+            #     for json_file in root.joinpath("annotations").glob("*.json"):
+                # 如果指定了include_json，检查文件名是否匹配
+                if inc_key and not any(pattern in json_file.stem for pattern in inc_key):
+                    continue
+                if exc_key and any(pattern in json_file.stem for pattern in exc_key):
+                    continue
+                json_files.append(json_file)
+                    
+        
+        others = [COCOX(json_file) for json_file in json_files]
+
+        self = self.merge(others=others, cat_keep=True, dst_file=self.cfg)
+        self.save_data()
+        
+        return self
+        

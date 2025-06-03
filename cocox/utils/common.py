@@ -26,23 +26,75 @@ class CCX:
     """
     ROOT: Optional[Path] = Path(".")
     ANNDIR: Optional[Path] = Path("annotations")
-    ANNFILE: Optional[Path] = Path("instances_default.json")
+    ANNFILE: Optional[Path] = None # Path("instances_default.json")
     IMGDIR: Optional[Path] = Path("images") # 图片根目录
-    IMGFOLDER: Optional[Path] = Path("default") # 默认图片目录
+    IMGFOLDER: Optional[Path] = None # Path(".") # 默认图片目录
     IMGDIR_SRC: Optional[Path] = None  #完整路径，而不是单个文件夹名
-    
-    
-    # delete
-    IMGDIR_TRAIN: Optional[Path] = Path("train")
-    IMGDIR_VAL: Optional[Path] = Path("val")
-    IMGDIR_TEST: Optional[Path] = Path("test")
-    ANNFILE_TRAIN: Optional[Path] = Path("instances_train.json")
-    ANNFILE_VAL: Optional[Path] = Path("instances_val.json")
-    ANNFILE_TEST: Optional[Path] = Path("instances_test.json")
-    
+
     IMGDIR_VISUAL: Optional[Path] = Path("vis_images")
     IMGDIR_ANNFILE_VISUAL: Optional[Path] = Path("vis_feature")
     YOLODIR: Optional[Path] = Path("yolo")
+    
+    def __setattr__(self, name, value):
+        """
+        重写属性设置方法，确保所有路径类型的属性都被转换为Path对象。
+        
+        Args:
+            name: 属性名
+            value: 属性值
+        """
+        # 如果值不是None且不是Path类型，则尝试转换为Path对象
+        if value is not None and not isinstance(value, Path):
+            try:
+                value = Path(value)
+            except:
+                pass
+        # 调用父类的__setattr__方法设置属性
+        super().__setattr__(name, value)
+    
+    def __post_init__(self):
+        """
+        初始化后处理函数，用于自动设置ANNFILE和IMGFOLDER的值。
+        
+        该函数在对象创建后自动调用，主要完成以下工作：
+        1. 设置默认的标注文件名和图片文件夹名
+        2. 根据ANNFILE和IMGFOLDER的存在情况进行互相转换：
+           - 如果只有IMGFOLDER，则根据它生成ANNFILE
+           - 如果只有ANNFILE，则从它提取IMGFOLDER
+           - 如果都不存在，则使用默认值
+        
+        注意：
+        - ANNFILE命名规则为"instances_{IMGFOLDER}.json"
+        - 从ANNFILE提取IMGFOLDER时，会去除"instances_"前缀
+        """
+
+                
+        # 如果IMGDIR_SRC为None，则自动设置为ROOT/IMGDIR
+        temp_annfile = Path("instances_default.json")
+        temp_imgfolder = Path(".")
+        # ANNFILE与IMGFOLDER互相转化
+        if self.ANNFILE is None and self.IMGFOLDER is not None:
+            # 如果IMGFOLDER存在但ANNFILE不存在，则根据IMGFOLDER设置ANNFILE
+            # 当imgfolder为.时，则设置为default
+            if self.IMGFOLDER == Path("."):
+                self.ANNFILE = Path("instances_default.json")
+            else:
+                self.ANNFILE = Path(f"instances_{self.IMGFOLDER}.json")
+        elif self.ANNFILE is not None and self.IMGFOLDER is None:
+            # 如果ANNFILE存在但IMGFOLDER不存在，则从ANNFILE获取IMGFOLDER
+            annfile_stem = self.ANNFILE.stem
+            if annfile_stem.startswith("instances_"):
+                self.IMGFOLDER = Path(annfile_stem[len("instances_"):])
+            else:
+                self.IMGFOLDER = Path(annfile_stem)
+        elif self.ANNFILE is None and self.IMGFOLDER is None:
+            # 如果都不存在，则使用默认值
+            self.ANNFILE = temp_annfile
+            self.IMGFOLDER = temp_imgfolder
+        # 将所有路径类型的属性转换为Path对象
+        for attr_name, attr_value in self.__dict__.items():
+            if attr_value is not None and not isinstance(attr_value, Path):
+                setattr(self, attr_name, Path(attr_value))
 
 # @dataclass
 class STATIC_DATA:
@@ -146,4 +198,6 @@ class Colors:
     def hex2rgb_int(h):
         """将十六进制颜色代码转换为RGB整数值(0-255范围)"""
         return tuple(int(h[1 + i:1 + i + 2], 16) for i in (0, 2, 4))
-    
+
+
+IMG_EXT = ['.jpg','.png','.jpeg','.bmp','.tiff','.gif']

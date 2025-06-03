@@ -35,3 +35,36 @@ This package was created with Cookiecutter_ and the `audreyr/cookiecutter-pypack
 
 .. _Cookiecutter: https://github.com/audreyr/cookiecutter
 .. _`audreyr/cookiecutter-pypackage`: https://github.com/audreyr/cookiecutter-pypackage
+
+
+
+
+TODO:
+
+单个文件：
+可视化 - 单个文件，多个文件，所有文件（默认）
+统计 - 数量信息，xywh关联信息
+
+
+global_info: 存在callback中用于记录信息
+
+img_input:
+    imgpath: 图片路径
+    cats: 类别信息
+..     以下为纠正后的目录信息
+    root: 根目录
+    imgdir: 图片目录 'images'
+    imgfolder: 图片文件夹 'train','val','test'
+
+    file_name: 图片名称
+    width: 图片宽度
+    height: 图片高度
+    
+ann_input:
+    id: 标注id
+    category_id: 类别id
+    bbox: 标注框
+    segmentation: 分割信息
+    area: 面积
+    iscrowd: 是否为crowd
+    

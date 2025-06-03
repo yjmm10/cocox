@@ -1,5 +1,15 @@
-import sys
+"""Test config"""
 from pathlib import Path
+from tempfile import TemporaryDirectory
 
-# 将项目根目录添加到 Python 路径
-sys.path.insert(0, str(Path(__file__).parent.parent)) 
+import pytest
+
+import sys
+import os
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
+@pytest.fixture
+def mock_path() -> Path:
+    """Mock a path, and clean when unit test done."""
+    with TemporaryDirectory() as temp_path:
+        yield Path(temp_path)

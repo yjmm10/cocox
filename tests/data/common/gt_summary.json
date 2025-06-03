@@ -1,0 +1,29 @@
+{
+  "cats": {
+    "Text": 1,
+    "Table": 2, 
+    "Formula": 3,
+    "Figure": 4
+  },
+  "list_img_ann_diff_in_ann": [],
+  "list_img_ann_diff_in_img": [],
+  "list_img_dir_diff_in_ann": [],
+  "list_img_dir_diff_in_img": [],
+  "nums_anns": 9,
+  "nums_cats": 4,
+  "nums_image_in_ann": 1,
+  "nums_image_in_dir": 1,
+  "nums_image_in_img": 1,
+  "nums_img_ann_diff": 0,
+  "nums_img_dir_diff": 0,
+  "relate_cat_box": {
+    "Text": 5,
+    "Formula": 3,
+    "Table": 1
+  },
+  "relate_cat_img": {
+    "Text": 1,
+    "Formula": 1,
+    "Table": 1
+  }
+}

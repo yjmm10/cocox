@@ -5,35 +5,106 @@ on:
     branches: [ main, master ]
   pull_request:
     branches: [ main, master ]
-  workflow_dispatch:
+
+# 设置 GITHUB_TOKEN 的权限以允许部署到 GitHub Pages
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# 只允许一个并发部署，跳过正在运行和最新排队之间的运行队列
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
 
 jobs:
-  build-and-deploy:
+  # 构建文档
+  build:
     runs-on: ubuntu-latest
-    
     steps:
     - name: 检出代码
       uses: actions/checkout@v4
-      
-    - name: 设置Python环境
+
+    - name: 设置 Python
       uses: actions/setup-python@v4
       with:
-        python-version: '3.10'
-        
+        python-version: "3.11"
+
     - name: 安装依赖
       run: |
         python -m pip install --upgrade pip
-        pip install sphinx sphinx-rtd-theme
         pip install -e .
-        
-    - name: 构建文档
+        pip install sphinx sphinx-rtd-theme sphinx-autodoc-typehints
+        pip install -r requirements_dev.txt
+
+    - name: 构建 Sphinx 文档
       run: |
         cd docs
+        make clean
         make html
-        
-    - name: 部署到GitHub Pages
-      if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
-      uses: peaceiris/actions-gh-pages@v3
+        # 创建 .nojekyll 文件以避免 GitHub Pages 的 Jekyll 处理
+        touch _build/html/.nojekyll
+
+    - name: 上传文档构建产物
+      uses: actions/upload-artifact@v3
       with:
-        github_token: ${{ secrets.GITHUB_TOKEN }}
-        publish_dir: ./docs/_build/html
+        name: documentation
+        path: docs/_build/html/
+
+    - name: 设置 Pages
+      if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+      uses: actions/configure-pages@v3
+
+    - name: 上传到 GitHub Pages
+      if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+      uses: actions/upload-pages-artifact@v2
+      with:
+        path: docs/_build/html
+
+  # 部署到 GitHub Pages
+  deploy:
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+    - name: 部署到 GitHub Pages
+      id: deployment
+      uses: actions/deploy-pages@v2
+
+  # 文档质量检查
+  docs-quality:
+    runs-on: ubuntu-latest
+    steps:
+    - name: 检出代码
+      uses: actions/checkout@v4
+
+    - name: 设置 Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: "3.11"
+
+    - name: 安装依赖
+      run: |
+        python -m pip install --upgrade pip
+        pip install -e .
+        pip install sphinx sphinx-rtd-theme doc8 rstcheck
+
+    - name: 检查 RST 文件语法
+      run: |
+        # 检查 RST 文件语法
+        find docs -name "*.rst" -exec rstcheck {} \;
+        find . -maxdepth 1 -name "*.rst" -exec rstcheck {} \;
+
+    - name: 检查文档风格
+      run: |
+        # 使用 doc8 检查文档风格
+        doc8 docs/ --max-line-length=88
+
+    - name: 构建文档并检查警告
+      run: |
+        cd docs
+        # 将 Sphinx 警告视为错误
+        sphinx-build -W -b html . _build/html 

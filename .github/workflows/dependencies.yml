@@ -1,0 +1,151 @@
+name: 依赖管理和安全检查
+
+on:
+  schedule:
+    # 每周一运行依赖检查
+    - cron: '0 8 * * 1'
+  push:
+    branches: [ main, master ]
+    paths:
+      - 'pyproject.toml'
+      - 'requirements*.txt'
+  workflow_dispatch:  # 允许手动触发
+
+jobs:
+  dependency-review:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+    - name: 检出代码
+      uses: actions/checkout@v4
+      
+    - name: 依赖审查
+      uses: actions/dependency-review-action@v3
+      with:
+        fail-on-severity: moderate
+
+  # 检查过时的依赖
+  outdated-dependencies:
+    runs-on: ubuntu-latest
+    steps:
+    - name: 检出代码
+      uses: actions/checkout@v4
+
+    - name: 设置 Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: "3.11"
+
+    - name: 安装工具
+      run: |
+        python -m pip install --upgrade pip
+        pip install pip-audit pipx
+        pipx install pip-check-updates
+
+    - name: 检查过时的依赖
+      run: |
+        pip install -e .
+        pip list --outdated
+
+    - name: 安全审计
+      run: |
+        pip-audit --desc --format=json --output=audit-report.json
+        pip-audit --desc
+
+    - name: 上传安全报告
+      uses: actions/upload-artifact@v3
+      with:
+        name: security-audit-report
+        path: audit-report.json
+
+  # 依赖许可证检查
+  license-check:
+    runs-on: ubuntu-latest
+    steps:
+    - name: 检出代码
+      uses: actions/checkout@v4
+
+    - name: 设置 Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: "3.11"
+
+    - name: 安装依赖和工具
+      run: |
+        python -m pip install --upgrade pip
+        pip install -e .
+        pip install pip-licenses
+
+    - name: 检查依赖许可证
+      run: |
+        pip-licenses --format=json --output-file=licenses.json
+        pip-licenses --format=markdown --output-file=licenses.md
+        pip-licenses
+
+    - name: 上传许可证报告
+      uses: actions/upload-artifact@v3
+      with:
+        name: license-report
+        path: |
+          licenses.json
+          licenses.md
+
+  # 创建 issue 报告过时依赖
+  create-dependency-issue:
+    runs-on: ubuntu-latest
+    needs: [outdated-dependencies]
+    if: github.event_name == 'schedule'
+    permissions:
+      issues: write
+    steps:
+    - name: 检出代码
+      uses: actions/checkout@v4
+
+    - name: 创建依赖更新 Issue
+      uses: actions/github-script@v6
+      with:
+        script: |
+          const title = '🔄 定期依赖更新检查';
+          const body = `
+          ## 依赖更新检查报告
+          
+          这是自动生成的依赖更新检查报告。
+          
+          ### 执行时间
+          ${new Date().toLocaleString('zh-CN')}
+          
+          ### 检查内容
+          - ✅ 安全漏洞扫描
+          - ✅ 过时依赖检查
+          - ✅ 许可证兼容性检查
+          
+          ### 建议操作
+          1. 查看 Actions 运行结果中的详细报告
+          2. 更新有安全漏洞的依赖
+          3. 考虑更新主要版本过时的依赖
+          
+          ### 相关链接
+          - [Workflow Run](${context.payload.repository.html_url}/actions/runs/${context.runId})
+          - [依赖文件](${context.payload.repository.html_url}/blob/main/pyproject.toml)
+          
+          ---
+          *此 Issue 由 GitHub Actions 自动创建*
+          `;
+          
+          // 检查是否已存在类似的 issue
+          const existingIssues = await github.rest.issues.listForRepo({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            state: 'open',
+            labels: ['dependencies', 'automated']
+          });
+          
+          if (existingIssues.data.length === 0) {
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: title,
+              body: body,
+              labels: ['dependencies', 'automated', 'maintenance']
+            });
+          } 

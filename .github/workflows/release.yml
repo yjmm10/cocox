@@ -1,0 +1,112 @@
+name: 发布到 PyPI
+
+on:
+  push:
+    tags:
+      - 'v*'  # 当推送形如 v1.0.0 的标签时触发
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: 设置 Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: "3.11"
+    
+    - name: 安装依赖
+      run: |
+        python -m pip install --upgrade pip
+        pip install -e ".[dev]"
+    
+    - name: 运行测试
+      run: |
+        pytest tests/ -v
+
+  build:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: 设置 Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: "3.11"
+    
+    - name: 安装构建工具
+      run: |
+        python -m pip install --upgrade pip
+        pip install build twine
+    
+    - name: 构建分发包
+      run: |
+        python -m build
+    
+    - name: 检查分发包
+      run: |
+        twine check dist/*
+    
+    - name: 上传构建产物
+      uses: actions/upload-artifact@v3
+      with:
+        name: python-package-distributions
+        path: dist/
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/p/cocox
+    permissions:
+      id-token: write  # 用于可信发布
+
+    steps:
+    - name: 下载构建产物
+      uses: actions/download-artifact@v3
+      with:
+        name: python-package-distributions
+        path: dist/
+    
+    - name: 发布到 PyPI
+      uses: pypa/gh-action-pypi-publish@release/v1
+      with:
+        # 使用可信发布，无需API token
+        verbose: true
+
+  github_release:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write  # 用于创建GitHub Release
+
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: 下载构建产物
+      uses: actions/download-artifact@v3
+      with:
+        name: python-package-distributions
+        path: dist/
+    
+    - name: 创建 GitHub Release
+      uses: softprops/action-gh-release@v1
+      with:
+        files: dist/*
+        draft: false
+        prerelease: false
+        generate_release_notes: true
+        body: |
+          ## 发布说明
+          
+          这是 COCOX 的 ${{ github.ref_name }} 版本。
+          
+          ### 安装方式
+          ```bash
+          pip install cocox==${{ github.ref_name }}
+          ```
+          
+          完整的变更日志请查看下方的自动生成内容。 

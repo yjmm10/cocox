@@ -1,0 +1,109 @@
+name: 更新项目徽章
+
+on:
+  push:
+    branches: [ main, master ]
+  schedule:
+    # 每天运行一次更新徽章
+    - cron: '0 6 * * *'
+  workflow_dispatch:
+
+jobs:
+  update-badges:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+    - name: 检出代码
+      uses: actions/checkout@v4
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: 设置 Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: "3.11"
+
+    - name: 安装依赖
+      run: |
+        python -m pip install --upgrade pip
+        pip install -e ".[dev]"
+
+    - name: 运行测试并生成覆盖率
+      run: |
+        pytest tests/ --cov=cocox --cov-report=xml
+
+    - name: 获取覆盖率百分比
+      id: coverage
+      run: |
+        COVERAGE=$(python -c "
+        import xml.etree.ElementTree as ET
+        tree = ET.parse('coverage.xml')
+        root = tree.getroot()
+        coverage = float(root.attrib['line-rate']) * 100
+        print(f'{coverage:.1f}')
+        ")
+        echo "percentage=$COVERAGE" >> $GITHUB_OUTPUT
+
+    - name: 创建徽章 JSON
+      run: |
+        mkdir -p .github/badges
+        
+        # 测试状态徽章
+        cat > .github/badges/tests.json << EOF
+        {
+          "schemaVersion": 1,
+          "label": "tests",
+          "message": "passing",
+          "color": "success"
+        }
+        EOF
+        
+        # 覆盖率徽章
+        COVERAGE_COLOR="red"
+        if (( $(echo "${{ steps.coverage.outputs.percentage }} >= 80" | bc -l) )); then
+          COVERAGE_COLOR="green"
+        elif (( $(echo "${{ steps.coverage.outputs.percentage }} >= 60" | bc -l) )); then
+          COVERAGE_COLOR="yellow"
+        fi
+        
+        cat > .github/badges/coverage.json << EOF
+        {
+          "schemaVersion": 1,
+          "label": "coverage",
+          "message": "${{ steps.coverage.outputs.percentage }}%",
+          "color": "$COVERAGE_COLOR"
+        }
+        EOF
+        
+        # Python 版本徽章
+        cat > .github/badges/python.json << EOF
+        {
+          "schemaVersion": 1,
+          "label": "python",
+          "message": "3.8+ | 3.12",
+          "color": "blue"
+        }
+        EOF
+        
+        # 许可证徽章
+        cat > .github/badges/license.json << EOF
+        {
+          "schemaVersion": 1,
+          "label": "license",
+          "message": "MIT",
+          "color": "blue"
+        }
+        EOF
+
+    - name: 提交徽章文件
+      run: |
+        git config --local user.email "action@github.com"
+        git config --local user.name "GitHub Action"
+        git add .github/badges/
+        if git diff --staged --quiet; then
+          echo "没有徽章需要更新"
+        else
+          git commit -m "🏷️ 更新项目徽章 [skip ci]"
+          git push
+        fi 

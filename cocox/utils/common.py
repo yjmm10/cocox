@@ -201,3 +201,58 @@ class Colors:
 
 
 IMG_EXT = ['.jpg','.png','.jpeg','.bmp','.tiff','.gif']
+
+
+
+
+# 打包指定数据
+def zip_data(data_dir, zip_file_path, file_exts=None):
+    """
+    打包指定数据目录中的特定文件格式
+    
+    参数:
+        data_dir: 数据目录路径
+        zip_file_path: 生成的zip文件保存路径,指定到 *.zip
+        file_exts: 要包含的文件扩展名列表，默认为None表示包含所有文件
+    """
+    import zipfile
+    import os
+    from pathlib import Path
+    
+    data_dir = Path(data_dir)
+    
+    # 如果没有指定文件扩展名，则不受限制包含所有文件
+    if file_exts is None:
+        file_exts = []
+    
+    with zipfile.ZipFile(zip_file_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
+        for root, _, files in os.walk(data_dir):
+            for file in files:
+                # 如果file_exts为空，则包含所有文件；否则检查文件扩展名是否在指定列表中
+                if not file_exts or any(file.lower().endswith(ext) for ext in file_exts):
+                    file_path = os.path.join(root, file)
+                    # 计算相对路径，保持目录结构
+                    arc_name = os.path.relpath(file_path, data_dir)
+                    zipf.write(file_path, arc_name)
+
+
+
+# 解压指定数据
+def unzip_data(zip_file_path, output_dir):
+    """
+    解压zip文件到指定目录
+    
+    参数:
+        zip_file_path: zip文件路径
+        output_dir: 解压输出目录
+    """
+    import zipfile
+    from pathlib import Path
+    
+    output_dir = Path(output_dir)
+    
+    # 确保输出目录存在
+    output_dir.mkdir(parents=True, exist_ok=True)
+    
+    with zipfile.ZipFile(zip_file_path, 'r') as zipf:
+        zipf.extractall(output_dir)

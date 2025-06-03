@@ -3,6 +3,7 @@ from dataclasses import dataclass, fields
 from collections import defaultdict
 from pathlib import Path
 import random
+from tqdm import tqdm
 import re
 import tempfile
 from typing import Callable, Dict, List, Optional, Union, Any,Tuple
@@ -1657,10 +1658,11 @@ class COCOX(BaseModel):
         # 获取所有图片id
         imgIds = obj.data.getImgIds()      
 
-        for img_id in imgIds:
+        global_infos = {}
+        for img_id in tqdm(imgIds,desc=f"纠正处理{obj.cfg.ROOT}:{obj.cfg.IMGFOLDER}"):
             # 加载图片
             img = obj.data.loadImgs(img_id)[0]
-            imgpath = obj.cfg.IMGDIR_SRC.joinpath(obj.cfg.IMGFOLDER).joinpath(img['file_name'])
+            imgpath = obj.cfg.IMGDIR_SRC.joinpath(img['file_name']) #.joinpath(obj.cfg.IMGFOLDER)
             
             # 加载标注
             annoIds = obj.data.getAnnIds(imgIds=img['id'])
@@ -1696,12 +1698,12 @@ class COCOX(BaseModel):
                             ann_input[ann['id']] = {}
                         ann_input[ann['id']][field] = ann[field]
             
-            global_info = {}
+            global_info = global_infos.get(img_id,{})
             # 调用回调函数处理数据,避免原始数据被修改
             result = callback(copy.deepcopy(img_input), copy.deepcopy(ann_input), **{**kwargs,**global_info})
-            
-            logger.info(f"global_info: {global_info}")
-            
+            if global_info:
+                global_infos[img_id] = global_info
+
             if result is not None:
                 img_output, ann_output = result
                 # 更新图像数据
@@ -1714,7 +1716,7 @@ class COCOX(BaseModel):
                     # 只更新回调函数返回的字段
                     for field in ann_fields:
                         ann[field] = ann_output[ann_id].get(field, ann[field])
-                    
+        logger.info(f"global_infos: {global_infos}")            
    
         return obj
 
@@ -1736,13 +1738,22 @@ class COCOX(BaseModel):
         Returns:
             COCOX: 合并后的COCOX对象
         """
-        # 获取关键字参数
+        # 获取annfile的关键字参数
         inc_key = kwargs.get('inc_key', None)  # 包含的JSON文件名模式
         if inc_key and not isinstance(inc_key, list):
             inc_key = [inc_key]
         exc_key = kwargs.get('exc_key', None)  # 排除的JSON文件名模式
         if exc_key and not isinstance(exc_key, list):
             exc_key = [exc_key]
+        
+        # 获取root的关键字参数
+        inc_root = kwargs.get('inc_root', None)  # 包含的JSON文件名模式
+        if inc_root and not isinstance(inc_root, list):
+            inc_root = [inc_root]
+        exc_root = kwargs.get('exc_root', None)  # 排除的JSON文件名模式
+        if exc_root and not isinstance(exc_root, list):
+            exc_root = [exc_root]
+        
 
             
         logger.info(f"Merge parameters: inc_key={inc_key}, exc_key={exc_key}")
@@ -1766,12 +1777,59 @@ class COCOX(BaseModel):
                 if exc_key and any(pattern in json_file.stem for pattern in exc_key):
                     continue
                 json_files.append(json_file)
-                    
         
-        others = [COCOX(json_file) for json_file in json_files]
+        others = list()        
+        for json_file in json_files:
+            co2x = COCOX(json_file)
+            if inc_root and not any(pattern in co2x.cfg.ROOT.stem for pattern in inc_root):
+                continue
+            if exc_root and any(pattern in co2x.cfg.ROOT.stem for pattern in exc_root):
+                continue
+            others.append(co2x)
+            
+        # others = [COCOX(json_file) for json_file in json_files]
 
         self = self.merge(others=others, cat_keep=True, dst_file=self.cfg)
         self.save_data()
         
         return self
+    
+    
+    # 未验证
+    def upload(self,
+               bucket_name:str, # 桶名 /test
+               object_name:str=".", # 桶上对象名 /bucket_name/object_name
+               **kwargs):
+        """
+        上传数据集到MinIO
         
+        Args:
+            bucket_name: 桶名
+            object_name: 对象名
+            **kwargs: 额外参数
+        """
+        with tempfile.TemporaryDirectory() as temp_dir:
+            zip_path = Path(temp_dir).joinpath(Path(object_name).name)
+            # 压缩文件夹子
+            zip_data(self.cfg.ROOT,zip_path,file_exts=[".json",".png",".jpg",".jpeg",".bmp",".tiff",".gif"])
+            
+            upload(zip_path,bucket_name,object_name)
+            
+    def download(self,
+                 bucket_name:Union[str,Path],
+                 object_name:Union[str,Path],
+                 **kwargs):
+        """
+        下载数据集到本地
+        """
+        bucket_name = Path(bucket_name)
+        object_name = Path(object_name)
+        # with tempfile.TemporaryDirectory() as temp_dir:
+        temp_dir = str(self.cfg.ROOT)+"_dd"
+        unzip_path = Path(temp_dir).joinpath(Path(object_name).name)
+        print(bucket_name.name,object_name.name,temp_dir)
+        
+        download(bucket_name.name,object_name.name,temp_dir)
+        assert unzip_path.exists()
+        unzip_data(unzip_path,self.cfg.ROOT)
+            

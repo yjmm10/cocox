@@ -105,7 +105,7 @@ def plot_anno_info(boxes, cls, names=(), save_dir=Path("")):
                         draw.rectangle(box.astype(np.int32).tolist(), width=1, outline=colors(cat_id,format="int"))
                     
                     axs[i].imshow(cat_img)
-                    cat_name = names.get(cat_id+1, f"Class {cat_id}")
+                    cat_name = names.get(str(cat_id+1), f"Class {cat_id}")
                     # 将类别名称显示在x轴下方
                     # 显示左右侧坐标轴，标签在x轴下方
                     axs[i].spines['left'].set_visible(True)

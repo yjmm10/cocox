@@ -22,7 +22,7 @@ def callback_process_cat(img_input, ann_input, **kwargs):
 
 def callback_process_img_name(img_input, ann_input, **kwargs):
     # 根据给出的数据进行文件名称修改，仅仅修改名称，不涉及到图片以及标注修改
-    import cv2    
+    import os
     from pathlib import Path
     import shutil
     # 获取参数
@@ -47,6 +47,11 @@ def callback_process_img_name(img_input, ann_input, **kwargs):
             dst_imgs.remove(dst_img)
             dst_path = img_input['root'].joinpath(img_input['imgdir']).joinpath(img_input['imgfolder']).joinpath(dst_img)
             dst_path.parent.mkdir(parents=True, exist_ok=True)
+            # 如果源文件和目标文件在同一目录，则使用重命名而不是复制
+            if img_path.parent == dst_path.parent:
+                os.rename(img_path, dst_path)
+                break
+            # 否则复制文件
             shutil.copy2(img_path, dst_path)
             break
         else:
@@ -139,8 +144,9 @@ def callback_process_img_size(img_input, ann_input, **kwargs):
         global_info['missing_imgs_num'] += 1
         return img_input, ann_input
     
+    # 最终移动到的图像目录
     if img_input['root'].joinpath(img_input['imgdir']).exists():
-        final_dst_imgpath = img_input['root'].joinpath("correct_images") / img_input['imgfolder'] / img_rel_path
+        final_dst_imgpath = img_input['root'].joinpath("correct_images") / img_input['imgfolder'] / found_img_path.name
     else:
         final_dst_imgpath = dst_imgpath
 
@@ -149,6 +155,9 @@ def callback_process_img_size(img_input, ann_input, **kwargs):
     final_dst_imgpath.parent.mkdir(parents=True, exist_ok=True)
     # 根据file_mode参数决定是移动还是复制图片
     if file_mode == 'move':
+        # 删除原始文件
+        # os.remove(img_path)
+        
         shutil.move(found_img_path, final_dst_imgpath)
     else:
         shutil.copy(found_img_path, final_dst_imgpath)
@@ -166,6 +175,9 @@ def callback_process_img_size(img_input, ann_input, **kwargs):
     img_input['width'] = new_img_width
     img_input['height'] = new_img_height
     
+    # 更新图片名称
+    img_input['file_name'] = found_img_path.name
+    
     # 更新标注信息
     for id, ann in ann_input.items():
         # 更新边界框
@@ -181,11 +193,15 @@ def callback_process_img_size(img_input, ann_input, **kwargs):
         # 更新分割点
         seg = ann['segmentation']
         if seg is not None and len(seg) > 0:
-            assert len(seg) % 2 == 0, "segmentation 的长度必须是偶数"
+            # assert len(seg) % 2 == 0, "segmentation 的长度必须是偶数"
             # 遍历seg中的每个点坐标
             for j in range(0, len(seg), 2):
-                seg[j] = seg[j] * scale_w      # x坐标
-                if j+1 < len(seg):
-                    seg[j+1] = seg[j+1] * scale_h  # y坐标
+                try:
+                    seg[j] = float(seg[j]) * scale_w      # x坐标
+                    if j+1 < len(seg):
+                        seg[j+1] = float(seg[j+1]) * scale_h  # y坐标
+                except Exception as e:
+                    print(f"{img_input['file_name']} 的{id}标注信息有误，请检查")
+
     
     return (img_input, ann_input)

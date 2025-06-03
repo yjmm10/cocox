@@ -843,3 +843,14 @@ def test_big_merge():
         assert len(result.data.dataset['images']) == 3
         assert len(list(Path(temp_dir).joinpath(temp_ccx.IMGDIR).joinpath(temp_ccx.IMGFOLDER).glob("*.*"))) == 3
     
+def test_upload():
+    from cocox.cocox import CCX
+    co2x = COCOX(cfg=CCX(ROOT="/code/github/cocox/tests/data/coco_data copy") ) 
+    co2x.upload(bucket_name="test",object_name="test/coco_data.zip")
+
+
+def test_download():
+    from cocox.cocox import CCX
+    co2x = COCOX(cfg=CCX(ROOT="/code/github/cocox/tests/data/coco_data_download")) 
+    co2x.download(bucket_name="test",object_name="./test/coco_data.zip")
+    
